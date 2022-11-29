@@ -1,5 +1,6 @@
 use log::{debug, error, info, trace, warn};
-use petgraph::stable_graph::{NodeIndex, StableGraph};
+use petgraph::stable_graph::StableGraph;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -36,6 +37,7 @@ pub fn read_graph(
     if graph.is_directed() {
         error!("Graph has to be undirected!");
     }
+    let mut graph_idx = HashMap::new();
 
     // Read the file line by line
     let mut n_lines: usize = 0;
@@ -59,20 +61,16 @@ pub fn read_graph(
             debug!("{:?}", edge);
         }
 
-        let find_n1 = find_node_by_weight(&graph, edge[0].clone());
-        let n1 = if find_n1.is_none() {
-            graph.add_node(edge[0].clone())
-        } else {
-            find_n1.unwrap()
-        };
-        let find_n2 = find_node_by_weight(&graph, edge[1].clone());
-        let n2 = if find_n2.is_none() {
-            graph.add_node(edge[1].clone())
-        } else {
-            find_n2.unwrap()
-        };
+        // Check if node already exists
+        if !graph_idx.contains_key(&edge[0]) {
+            graph_idx.insert(edge[0].clone(), graph.add_node(edge[0].clone()));
+        }
+        if !graph_idx.contains_key(&edge[1]) {
+            graph_idx.insert(edge[1].clone(), graph.add_node(edge[1].clone()));
+        }
         trace!("Graph: {:?}", graph);
 
+        // Parse weight
         let mut edge_weight: f32 = edge[weight_field - 1]
             .parse()
             .expect("cannot convert weight to float");
@@ -97,9 +95,9 @@ pub fn read_graph(
                 edge_weight = 1.0;
             }
             // Add edge
-            let _e1 = graph.add_edge(n1, n2, edge_weight);
+            let _e1 = graph.add_edge(graph_idx[&edge[0]], graph_idx[&edge[1]], edge_weight);
             // Add other edge, until "Undirected" is implemented
-            let _e2 = graph.add_edge(n2, n1, edge_weight);
+            let _e2 = graph.add_edge(graph_idx[&edge[1]], graph_idx[&edge[0]], edge_weight);
         }
     }
 
@@ -119,15 +117,11 @@ fn round(x: f32, decimals: i32) -> f32 {
     (x * y).round() / y
 }
 
-fn find_node_by_weight(g: &StableGraph<String, f32>, weight: String) -> Option<NodeIndex> {
-    g.node_indices()
-        .find(|n| g.node_weight(*n) == Some(&weight))
-}
-
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use petgraph::stable_graph::NodeIndex;
 
     fn get_graph() -> (StableGraph<std::string::String, f32>, NodeIndex) {
         let mut graph = petgraph::stable_graph::StableGraph::<String, f32>::new();
@@ -139,15 +133,6 @@ mod tests {
         let _cost_1 = graph.add_edge(dest_1, dest_11, 250.45);
         let _cost_2 = graph.add_edge(dest_1, dest_12, 1099.34);
         return (graph, dest_1);
-    }
-
-    #[test]
-    fn test_find_node_by_weight() {
-        let (graph, node) = get_graph();
-        assert_eq!(
-            find_node_by_weight(&graph, "San Diego".to_string()).unwrap(),
-            node
-        );
     }
 
     #[test]
