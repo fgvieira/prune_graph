@@ -1,5 +1,5 @@
 use log::{debug, error, info, trace, warn};
-use petgraph::stable_graph::StableGraph;
+use petgraph::stable_graph::{NodeIndex, StableGraph};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -12,7 +12,7 @@ pub fn read_graph(
     weight_type: String,
     weight_min: f32,
     weight_precision: u8,
-) -> StableGraph<String, f32> {
+) -> (StableGraph<String, f32>, HashMap<String, NodeIndex>) {
     // Open input file
     let input: Box<dyn std::io::Read + 'static> = if tsv.as_os_str().eq("-") {
         Box::new(std::io::stdin())
@@ -97,7 +97,7 @@ pub fn read_graph(
             // Add edge
             let _e1 = graph.add_edge(graph_idx[&edge[0]], graph_idx[&edge[1]], edge_weight);
             // Add other edge, until "Undirected" is implemented
-            let _e2 = graph.add_edge(graph_idx[&edge[1]], graph_idx[&edge[0]], edge_weight);
+            //let _e2 = graph.add_edge(graph_idx[&edge[1]], graph_idx[&edge[0]], edge_weight);
         }
     }
 
@@ -109,7 +109,7 @@ pub fn read_graph(
         weight_min
     );
 
-    return graph;
+    return (graph, graph_idx);
 }
 
 fn round(x: f32, decimals: i32) -> f32 {
@@ -121,30 +121,36 @@ fn round(x: f32, decimals: i32) -> f32 {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use petgraph::stable_graph::NodeIndex;
-
-    fn get_graph() -> (StableGraph<std::string::String, f32>, NodeIndex) {
-        let mut graph = petgraph::stable_graph::StableGraph::<String, f32>::new();
-        let origin = graph.add_node("Denver".to_string());
-        let dest_1 = graph.add_node("San Diego".to_string());
-        let _cost_1 = graph.add_edge(origin, dest_1, 50.45);
-        let dest_11 = graph.add_node("Washington".to_string());
-        let dest_12 = graph.add_node("New York".to_string());
-        let _cost_1 = graph.add_edge(dest_1, dest_11, 250.45);
-        let _cost_2 = graph.add_edge(dest_1, dest_12, 1099.34);
-        return (graph, dest_1);
-    }
 
     #[test]
     fn test_find_all_edges() {
-        let (graph, node) = get_graph();
-        assert_eq!(graph.edges(node).count(), 3);
+        let (graph, graph_idx) = read_graph(
+            PathBuf::from("test/example.tsv"),
+            false,
+            7,
+            "a".to_string(),
+            0.2,
+            4,
+        );
+        assert_eq!(graph.edges(graph_idx["NC_046966.1:26131"]).count(), 5);
     }
 
     #[test]
     fn test_find_dir_edges() {
-        let (graph, node) = get_graph();
-        assert_eq!(graph.edges(node).count(), 2);
+        let (graph, graph_idx) = read_graph(
+            PathBuf::from("test/example.tsv"),
+            false,
+            7,
+            "a".to_string(),
+            0.2,
+            4,
+        );
+        assert_eq!(
+            graph
+                .edges_directed(graph_idx["NC_046966.1:26131"], petgraph::Outgoing)
+                .count(),
+            3
+        );
     }
 
     #[test]

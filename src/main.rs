@@ -31,7 +31,7 @@ fn main() {
         .expect("cannot start logger");
 
     // Read TSV into graph
-    let mut graph = crate::graph::read_graph(
+    let (mut graph, graph_idx) = crate::graph::read_graph(
         args.input,
         args.header,
         args.weight_field,
@@ -196,4 +196,27 @@ fn find_heavy_node(g: &StableGraph<String, f32>) -> (NodeIndex, f32) {
     );
 
     return node_weights[0];
+}
+
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_find_heaviest_node() {
+        let (graph, graph_idx) = crate::graph::read_graph(
+            PathBuf::from("test/example.tsv"),
+            false,
+            7,
+            "a".to_string(),
+            0.2,
+            4,
+        );
+
+        let (node_heavy, node_weight) = find_heavy_node(&graph);
+        assert_eq!(graph.node_weight(node_heavy).unwrap(), "NC_046966.1:38024");
+        assert_eq!(node_weight, 8.2862);
+    }
 }
