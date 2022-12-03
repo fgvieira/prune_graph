@@ -28,7 +28,7 @@ pub fn log_format(
 pub struct Args {
     /// Number of threads
     #[clap(short, long, default_value_t = 1)]
-    pub threads: u8,
+    pub n_threads: usize,
 
     /// File with edges to be pruned
     #[clap(short, long = "in", default_value = "-")]

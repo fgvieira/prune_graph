@@ -29,7 +29,6 @@ pub fn read_graph(
     //let in_reader = BufReader::new(File::open(tsv).expect("cannot open input file"));
 
     // Create graph
-    info!("Creating graph...");
     let mut graph = StableGraph::<String, f32>::new();
     //let mut graph = petgraph::stable_graph::StableGraph::<String, f32, petgraph::Undirected>::new();
     //let mut graph = petgraph::stable_graph::StableGraph::<String, f32>::new_undirected();
@@ -97,7 +96,7 @@ pub fn read_graph(
             // Add edge
             let _e1 = graph.add_edge(graph_idx[&edge[0]], graph_idx[&edge[1]], edge_weight);
             // Add other edge, until "Undirected" is implemented
-            //let _e2 = graph.add_edge(graph_idx[&edge[1]], graph_idx[&edge[0]], edge_weight);
+            let _e2 = graph.add_edge(graph_idx[&edge[1]], graph_idx[&edge[0]], edge_weight);
         }
     }
 
@@ -115,6 +114,68 @@ pub fn read_graph(
 fn round(x: f32, decimals: i32) -> f32 {
     let y = 10f32.powi(decimals);
     (x * y).round() / y
+}
+
+pub fn find_heaviest_node(
+    g: &StableGraph<String, f32>,
+    nodes_idx: Option<&Vec<NodeIndex>>,
+) -> (NodeIndex, f32) {
+    //let mut weight_max: f32 = 0.0;
+    //let mut node_heaviest: usize = 0;
+    //for node_ix in g.node_indices() {
+    //    let mut weight: f32 = 0.0;
+    //    for edge in g.edges(node_ix) {
+    //	    debug!("X: {:?} {:?}", g.node_weight(node_ix), g.edge_weight(edge.id()).unwrap());
+    //      weight += g.edge_weight(edge.id()).unwrap();
+    //    }
+    //    if weight > weight_max {
+    //        weight_max = weight;
+    //        node_heaviest = node_ix;
+    //    }
+    //    println!("{:?}", weight);
+    //}
+
+    let mut node_weights: Vec<(NodeIndex, f32)> = match nodes_idx {
+        Some(x) => x
+            .iter()
+            .map(|node_idx| {
+                (
+                    *node_idx,
+                    g.edges(*node_idx)
+                        .map(|edge| -> &f32 { edge.weight() })
+                        .sum::<f32>(),
+                )
+            })
+            .collect(),
+        None => g
+            .node_indices()
+            .map(|node_idx| {
+                (
+                    node_idx,
+                    g.edges(node_idx)
+                        .map(|edge| -> &f32 { edge.weight() })
+                        .sum::<f32>(),
+                )
+            })
+            .collect(),
+    };
+
+    //Sort nodes based on connected edge weight and then alphabetically
+    node_weights.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap()
+            .then(g.node_weight(a.0).cmp(&g.node_weight(b.0)))
+    });
+
+    trace!("Sorted node weights: {:?}", node_weights);
+    debug!(
+        "Heaviest node and weight: {} [{:?}] => {}",
+        g.node_weight(node_weights[0].0).unwrap(),
+        node_weights[0].0,
+        node_weights[0].1
+    );
+
+    return node_weights[0];
 }
 
 #[cfg(test)]
@@ -155,9 +216,50 @@ mod tests {
 
     #[test]
     fn test_round() {
-        assert_eq!(round(4.36534, 2), 4.37);
         assert_eq!(round(4.36, 2), 4.36);
         assert_eq!(round(4.363, 2), 4.36);
         assert_eq!(round(4.368, 2), 4.37);
+        assert_eq!(round(4.36534, 2), 4.37);
+        assert_eq!(round(0.999670, 4), 0.9997);
+        assert_eq!(round(0.999719, 4), 0.9997);
+        assert_eq!(round(0.999800, 4), 0.9998);
+    }
+
+    #[test]
+    fn test_find_heaviest_node() {
+        let (graph, _graph_idx) = read_graph(
+            PathBuf::from("test/example.tsv"),
+            false,
+            7,
+            "a".to_string(),
+            0.2,
+            4,
+        );
+
+        let (node_heaviest, node_weight) = find_heaviest_node(&graph);
+        assert_eq!(
+            graph.node_weight(node_heaviest).unwrap(),
+            "NC_046966.1:38024"
+        );
+        assert_eq!(node_weight, 9.2859);
+    }
+
+    #[test]
+    fn test_find_connected_components() {
+        use petgraph::algo::{kosaraju_scc, tarjan_scc};
+
+        let (graph, _graph_idx) = read_graph(
+            PathBuf::from("test/example.tsv"),
+            false,
+            7,
+            "a".to_string(),
+            0.2,
+            4,
+        );
+
+        let ccs = tarjan_scc(&graph);
+        assert_eq!(ccs.len(), 13);
+        let ccs = kosaraju_scc(&graph);
+        assert_eq!(ccs.len(), 13);
     }
 }

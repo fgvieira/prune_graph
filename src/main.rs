@@ -1,9 +1,10 @@
 use clap::Parser;
 use itertools::sorted;
 use log::{debug, error, info, trace, warn};
-use petgraph::dot::{Config, Dot};
-use petgraph::stable_graph::{NodeIndex, StableGraph};
-use petgraph::visit::EdgeRef;
+use petgraph::algo::tarjan_scc;
+use petgraph::dot::Dot;
+use rayon::prelude::*;
+use rayon::ThreadPoolBuilder;
 use std::fs::File;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
@@ -12,10 +13,10 @@ mod graph;
 mod parse_args;
 
 /*
-- value_enum for log_level
-- show type of option, and not name
+- ARGS: value_enum for log_level
+- ARGS: show type of option, and not name
 - read/write from file/std
-- undirected graph
+- GRAPH: undirected graph
 - write vector to file
 */
 fn main() {
@@ -30,8 +31,18 @@ fn main() {
         .start()
         .expect("cannot start logger");
 
+    // Create threadpool
+    if args.n_threads > 5 {
+        warn!("High number of threads only make sense for HUGE graphs. For must uses 2/3 threads are enough.");
+    }
+    ThreadPoolBuilder::new()
+        .num_threads(args.n_threads)
+        .build_global()
+        .expect("cannot create threadpool");
+
     // Read TSV into graph
-    let (mut graph, graph_idx) = crate::graph::read_graph(
+    info!("Creating graph...");
+    let (mut graph, _graph_idx) = crate::graph::read_graph(
         args.input,
         args.header,
         args.weight_field,
@@ -74,7 +85,6 @@ fn main() {
         }
         let mut out_graph =
             std::fs::File::create(args.out_graph.unwrap()).expect("cannot open graph file!");
-        //let output = format!("{}", Dot::with_config(&graph, &[Config::NodeIndexLabel]));
         let output = format!("{}", Dot::new(&graph));
         out_graph
             .write_all(&output.as_bytes())
@@ -89,15 +99,16 @@ fn main() {
 
     let mut prev_time = Instant::now();
     let mut delta_n_nodes = 0;
+    // Store deleted nodes
     let mut nodes_excl = Vec::<String>::new();
     while graph.edge_count() > 0 {
         if graph.node_count() % 3000 == 0 {
             let delta_time = prev_time.elapsed();
             info!(
-                "Pruned {0} nodes in {1}s ({2} nodes/s); {3} nodes remaining with {4} edges.",
+                "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges.",
                 delta_n_nodes,
                 delta_time.as_secs(),
-                delta_n_nodes / delta_time.as_secs(),
+                delta_n_nodes as f32 / delta_time.as_secs() as f32,
                 graph.node_count(),
                 graph.edge_count()
             );
@@ -105,19 +116,26 @@ fn main() {
             delta_n_nodes = 0
         }
 
-        let (node_heavy, _node_heavy_weight) = find_heavy_node(&graph);
+        let nodes_heavy: Vec<(petgraph::stable_graph::NodeIndex, f32)> = tarjan_scc(&graph)
+            .par_iter()
+            .filter(|x| x.len() > 1)
+            .map(|x| crate::graph::find_heaviest_node(&graph, Some(x)))
+            .collect();
+        trace!("{:?}", nodes_heavy);
 
-        if args.keep_heavy {
-            let mut nodes_del = graph.neighbors_undirected(node_heavy).detach();
-            while let Some(node_neighb) = nodes_del.next_node(&graph) {
-                nodes_excl.push(graph.node_weight(node_neighb).unwrap().to_string());
-                graph.remove_node(node_neighb);
+        for (node_heavy, _node_heavy_weight) in nodes_heavy {
+            if args.keep_heavy {
+                let mut nodes_del = graph.neighbors_undirected(node_heavy).detach();
+                while let Some(node_neighb) = nodes_del.next_node(&graph) {
+                    nodes_excl.push(graph.node_weight(node_neighb).unwrap().to_string());
+                    graph.remove_node(node_neighb);
+                    delta_n_nodes += 1;
+                }
+            } else {
+                nodes_excl.push(graph.node_weight(node_heavy).unwrap().to_string());
+                graph.remove_node(node_heavy);
                 delta_n_nodes += 1;
             }
-        } else {
-            nodes_excl.push(graph.node_weight(node_heavy).unwrap().to_string());
-            graph.remove_node(node_heavy);
-            delta_n_nodes += 1;
         }
     }
     info!(
@@ -151,72 +169,8 @@ fn main() {
         }
     }
 
-    info!("Total runtime: {}s", start_time.elapsed().as_secs());
-}
-
-fn find_heavy_node(g: &StableGraph<String, f32>) -> (NodeIndex, f32) {
-    //let mut weight_max: f32 = 0.0;
-    //let mut node_heavy: usize = 0;
-    //for node_ix in g.node_indices() {
-    //    let mut weight: f32 = 0.0;
-    //    for edge in g.edges(node_ix) {
-    //	    debug!("X: {:?} {:?}", g.node_weight(node_ix), g.edge_weight(edge.id()).unwrap());
-    //      weight += g.edge_weight(edge.id()).unwrap();
-    //    }
-    //    if weight > weight_max {
-    //        weight_max = weight;
-    //        node_heavy = node_ix;
-    //    }
-    //    println!("{:?}", weight);
-    //}
-
-    let mut node_weights: Vec<(NodeIndex, f32)> = g
-        .node_indices()
-        .map(|node_ix| {
-            (
-                node_ix,
-                g.edges(node_ix)
-                    .map(|node_edge| -> &f32 { g.edge_weight(node_edge.id()).unwrap() })
-                    .sum::<f32>(),
-            )
-        })
-        .collect();
-
-    node_weights.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
-            .unwrap()
-            .then(g.node_weight(a.0).cmp(&g.node_weight(b.0)))
-    });
-
-    trace!("Sorted node weights: {:?}", node_weights);
-    debug!(
-        "Max weight node and weight: {} {:.4}",
-        g.node_weight(node_weights[0].0).unwrap(),
-        node_weights[0].1
+    info!(
+        "Total runtime: {:.2} mins",
+        start_time.elapsed().as_secs() as f32 / 60.0
     );
-
-    return node_weights[0];
-}
-
-#[cfg(test)]
-mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_find_heaviest_node() {
-        let (graph, graph_idx) = crate::graph::read_graph(
-            PathBuf::from("test/example.tsv"),
-            false,
-            7,
-            "a".to_string(),
-            0.2,
-            4,
-        );
-
-        let (node_heavy, node_weight) = find_heavy_node(&graph);
-        assert_eq!(graph.node_weight(node_heavy).unwrap(), "NC_046966.1:38024");
-        assert_eq!(node_weight, 8.2862);
-    }
 }
