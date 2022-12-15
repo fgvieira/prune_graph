@@ -7,10 +7,10 @@ use std::path::PathBuf;
 
 pub fn read_graph(
     tsv: PathBuf,
-    header: bool,
-    weight_field: usize,
-    weight_type: String,
-    weight_min: f32,
+    has_header: bool,
+    weight_field: String,
+    weight_filter: Option<String>,
+    weight_n_edges: bool,
     weight_precision: u8,
 ) -> (StableGraph<String, f32>, HashMap<String, NodeIndex>) {
     // Open input file
@@ -39,28 +39,35 @@ pub fn read_graph(
     let mut graph_idx = HashMap::new();
 
     // Read the file line by line
+    let mut header: Vec<String> = Vec::new();
     let mut n_lines: usize = 0;
     for (index, line) in in_reader.lines().enumerate() {
         let line = line.expect("cannot read line from input file");
 
-        // Check for header
-        if header && index == 0 {
-            continue;
+        //let edge: Vec<&str> = line.split('\t').collect();
+        let edge: Vec<String> = line.split('\t').map(str::to_string).collect();
+
+        // Define header
+        if index == 0 {
+            header = if has_header {
+                edge.clone()
+            } else {
+                (1..edge.len() + 1)
+                    .map(|h| format!("column_{}", h.to_string()))
+                    .collect()
+            };
+            debug!("HEADER = {:?}", header);
+            if !header.iter().any(|h| h == &weight_field) {
+                error!("weight_field '{weight_field}' is not present in the header");
+                std::process::exit(-1);
+            }
+            if has_header {
+                continue;
+            }
         }
         n_lines += 1;
 
-        //let edge: Vec<&str> = line.splitn(weight_field + 1, '\t').collect();
-        let edge: Vec<String> = line
-            .splitn(weight_field + 1, '\t')
-            .map(str::to_string)
-            .collect();
-
-        // Debug
-        if index < 10 {
-            debug!("{:?}", edge);
-        }
-
-        // Check if node already exists
+        // Check if nodes exist and add them if not
         if !graph_idx.contains_key(&edge[0]) {
             graph_idx.insert(edge[0].clone(), graph.add_node(edge[0].clone()));
         }
@@ -69,50 +76,83 @@ pub fn read_graph(
         }
         trace!("Graph: {:?}", graph);
 
-        // Parse weight
-        let mut edge_weight: f32 = edge[weight_field - 1]
-            .parse()
-            .expect("cannot convert weight to float");
-        if edge_weight.is_nan() {
-            warn!("NaN found:\n\t{:?}", edge);
-            continue;
-        } else if weight_type == "p" {
-            // set negative values to zero
-            edge_weight = if edge_weight < 0.0 { 0.0 } else { edge_weight };
-        } else if weight_type == "a" {
-            // use absolute weight
-            edge_weight = edge_weight.abs();
+        // Prepare dict for ez_eval
+        use std::collections::BTreeMap;
+        let mut edge_weights: BTreeMap<String, f64> = BTreeMap::from_iter(
+            edge.iter()
+                .skip(2)
+                .map(|x| {
+                    round(
+                        x.parse::<f64>().expect("cannot convert weight to float64"),
+                        weight_precision.into(),
+                    )
+                })
+                .enumerate()
+                .map(|(i, w)| (header[i + 2].clone(), w))
+                .into_iter(),
+        );
+
+        // Debug
+        if index < 10 {
+            debug!("{:?}", edge);
+            debug!("{:?}", edge_weights);
         }
 
-        // Round edge weights
-        edge_weight = round(edge_weight, weight_precision.into());
+        // Skip edge if NaN
+        if edge_weights[&weight_field].is_nan() {
+            warn!("NaN found:\n\t{:?}", edge);
+            continue;
+        }
 
         // Add edge to graph
-        if edge_weight >= weight_min {
-            // Convert weights to number of edges
-            if weight_type == "n" {
-                edge_weight = 1.0;
-            }
+        if weight_filter.is_none()
+            || fasteval::ez_eval(&weight_filter.as_ref().unwrap(), &mut edge_weights)
+                .expect("cannot evaluate expression")
+                != 0.0
+        {
             // Add edge
-            let _e1 = graph.add_edge(graph_idx[&edge[0]], graph_idx[&edge[1]], edge_weight);
+            let _e1 = graph.add_edge(
+                graph_idx[&edge[0]],
+                graph_idx[&edge[1]],
+                if weight_n_edges {
+                    1.0
+                } else {
+                    edge_weights[&weight_field].clone() as f32
+                },
+            );
             // Add other edge, until "Undirected" is implemented
-            let _e2 = graph.add_edge(graph_idx[&edge[1]], graph_idx[&edge[0]], edge_weight);
+            let _e2 = graph.add_edge(
+                graph_idx[&edge[1]],
+                graph_idx[&edge[0]],
+                if weight_n_edges {
+                    1.0
+                } else {
+                    edge_weights[&weight_field].clone() as f32
+                },
+            );
         }
     }
 
     info!(
-        "Input file has {0} nodes with {1} edges ({2} edges with weight >= {3})",
+        "Input file has {0} nodes with {1} edges{2}",
         graph.node_count(),
         n_lines,
-        graph.edge_count(),
-        weight_min
+        if weight_filter.is_some() {
+            format!(
+                " ({0} edges with {1})",
+                graph.edge_count(),
+                weight_filter.unwrap()
+            )
+        } else {
+            "".to_string()
+        }
     );
 
     return (graph, graph_idx);
 }
 
-fn round(x: f32, decimals: i32) -> f32 {
-    let y = 10f32.powi(decimals);
+fn round(x: f64, decimals: i32) -> f64 {
+    let y = 10f64.powi(decimals);
     (x * y).round() / y
 }
 
@@ -185,27 +225,15 @@ mod tests {
 
     #[test]
     fn test_find_all_edges() {
-        let (graph, graph_idx) = read_graph(
-            PathBuf::from("test/example.tsv"),
-            false,
-            7,
-            "a".to_string(),
-            0.2,
-            4,
-        );
+        let (graph, graph_idx) =
+            read_graph(PathBuf::from("test/example.tsv"), false, 7, false, 0.2, 4);
         assert_eq!(graph.edges(graph_idx["NC_046966.1:26131"]).count(), 5);
     }
 
     #[test]
     fn test_find_dir_edges() {
-        let (graph, graph_idx) = read_graph(
-            PathBuf::from("test/example.tsv"),
-            false,
-            7,
-            "a".to_string(),
-            0.2,
-            4,
-        );
+        let (graph, graph_idx) =
+            read_graph(PathBuf::from("test/example.tsv"), false, 7, false, 0.2, 4);
         assert_eq!(
             graph
                 .edges_directed(graph_idx["NC_046966.1:26131"], petgraph::Outgoing)
@@ -227,16 +255,10 @@ mod tests {
 
     #[test]
     fn test_find_heaviest_node() {
-        let (graph, _graph_idx) = read_graph(
-            PathBuf::from("test/example.tsv"),
-            false,
-            7,
-            "a".to_string(),
-            0.2,
-            4,
-        );
+        let (graph, _graph_idx) =
+            read_graph(PathBuf::from("test/example.tsv"), false, 7, false, 0.2, 4);
 
-        let (node_heaviest, node_weight) = find_heaviest_node(&graph);
+        let (node_heaviest, node_weight) = find_heaviest_node(&graph, None);
         assert_eq!(
             graph.node_weight(node_heaviest).unwrap(),
             "NC_046966.1:38024"
@@ -248,14 +270,8 @@ mod tests {
     fn test_find_connected_components() {
         use petgraph::algo::{kosaraju_scc, tarjan_scc};
 
-        let (graph, _graph_idx) = read_graph(
-            PathBuf::from("test/example.tsv"),
-            false,
-            7,
-            "a".to_string(),
-            0.2,
-            4,
-        );
+        let (graph, _graph_idx) =
+            read_graph(PathBuf::from("test/example.tsv"), false, 7, false, 0.2, 4);
 
         let ccs = tarjan_scc(&graph);
         assert_eq!(ccs.len(), 13);

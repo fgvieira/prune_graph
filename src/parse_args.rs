@@ -50,17 +50,17 @@ pub struct Args {
     #[clap(long, required = false)]
     pub out_graph: Option<PathBuf>,
 
-    /// Field from input with weight
-    #[clap(short = 'f', long, default_value_t = 3)]
-    pub weight_field: usize,
+    /// Column in input file to use as weight (needs to be present in header); if input file has no header you can use "column_#", where "#" stands for the column number
+    #[clap(short = 'w', long, default_value = "column_3")]
+    pub weight_field: String,
 
-    /// Minimum weight between two nodes to assume they are related
-    #[clap(short = 'm', long)]
-    pub weight_min: f32,
+    /// Filtering expression
+    #[clap(short = 'f', long, required = false)]
+    pub weight_filter: Option<String>,
 
-    /// Sum of (w)eights, sum of (a)bsolute weights, sum of (p)ositive weights, or (n)umber of connections
-    #[clap(short = 'w', long, default_value = "a")]
-    pub weight_type: String,
+    /// Calculate node's weight by number of connected edges, instead of summing over their weights (default)
+    #[clap(short = 'n', long)]
+    pub weight_n_edges: bool,
 
     #[clap(long, default_value_t = 4)]
     pub weight_precision: u8,

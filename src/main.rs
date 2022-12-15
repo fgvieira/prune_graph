@@ -46,8 +46,8 @@ fn main() {
         args.input,
         args.header,
         args.weight_field,
-        args.weight_type,
-        args.weight_min,
+        args.weight_filter,
+        args.weight_n_edges,
         args.weight_precision,
     );
 
@@ -102,7 +102,7 @@ fn main() {
     // Store deleted nodes
     let mut nodes_excl = Vec::<String>::new();
     while graph.edge_count() > 0 {
-        if graph.node_count() % 3000 == 0 {
+        if graph.node_count() % 1000 == 0 {
             let delta_time = prev_time.elapsed();
             info!(
                 "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges.",
