@@ -156,91 +156,53 @@ fn round(x: f64, decimals: i32) -> f64 {
     (x * y).round() / y
 }
 
+fn get_nodes_weight<I>(iter: I, g: &StableGraph<String, f32>) -> Vec<(NodeIndex, f32)>
+where
+    I: Iterator<Item = NodeIndex>,
+{
+    iter.map(|node_idx| {
+        (
+            node_idx,
+            g.edges(node_idx)
+                .map(|edge| -> &f32 { edge.weight() })
+                .sum::<f32>(),
+        )
+    })
+    .collect()
+}
+
 pub fn find_heaviest_node(
     g: &StableGraph<String, f32>,
     nodes_idx: Option<&Vec<NodeIndex>>,
 ) -> (NodeIndex, f32) {
-    //let mut weight_max: f32 = 0.0;
-    //let mut node_heaviest: usize = 0;
-    //for node_ix in g.node_indices() {
-    //    let mut weight: f32 = 0.0;
-    //    for edge in g.edges(node_ix) {
-    //	    debug!("X: {:?} {:?}", g.node_weight(node_ix), g.edge_weight(edge.id()).unwrap());
-    //      weight += g.edge_weight(edge.id()).unwrap();
-    //    }
-    //    if weight > weight_max {
-    //        weight_max = weight;
-    //        node_heaviest = node_ix;
-    //    }
-    //    println!("{:?}", weight);
-    //}
-
-    let mut node_weights: Vec<(NodeIndex, f32)> = match nodes_idx {
-        Some(x) => x
-            .iter()
-            .map(|node_idx| {
-                (
-                    *node_idx,
-                    g.edges(*node_idx)
-                        .map(|edge| -> &f32 { edge.weight() })
-                        .sum::<f32>(),
-                )
-            })
-            .collect(),
-        None => g
-            .node_indices()
-            .map(|node_idx| {
-                (
-                    node_idx,
-                    g.edges(node_idx)
-                        .map(|edge| -> &f32 { edge.weight() })
-                        .sum::<f32>(),
-                )
-            })
-            .collect(),
-    };
+    // Calculate each node's weight
+    let mut nodes_weight = nodes_idx.map_or_else(
+        || get_nodes_weight(g.node_indices(), g),
+        |vec| get_nodes_weight(vec.into_iter().copied(), g),
+    );
 
     //Sort nodes based on connected edge weight and then alphabetically
-    node_weights.sort_by(|a, b| {
+    nodes_weight.sort_by(|a, b| {
         b.1.partial_cmp(&a.1)
             .unwrap()
             .then(g.node_weight(a.0).cmp(&g.node_weight(b.0)))
     });
 
-    trace!("Sorted node weights: {:?}", node_weights);
+    trace!("Sorted node weights: {:?}", nodes_weight);
     debug!(
         "Heaviest node and weight: {} [{:?}] => {}",
-        g.node_weight(node_weights[0].0).unwrap(),
-        node_weights[0].0,
-        node_weights[0].1
+        g.node_weight(nodes_weight[0].0).unwrap(),
+        nodes_weight[0].0,
+        nodes_weight[0].1
     );
 
-    return node_weights[0];
+    return nodes_weight[0];
 }
 
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-
-    #[test]
-    fn test_find_all_edges() {
-        let (graph, graph_idx) =
-            read_graph(PathBuf::from("test/example.tsv"), false, 7, false, 0.2, 4);
-        assert_eq!(graph.edges(graph_idx["NC_046966.1:26131"]).count(), 5);
-    }
-
-    #[test]
-    fn test_find_dir_edges() {
-        let (graph, graph_idx) =
-            read_graph(PathBuf::from("test/example.tsv"), false, 7, false, 0.2, 4);
-        assert_eq!(
-            graph
-                .edges_directed(graph_idx["NC_046966.1:26131"], petgraph::Outgoing)
-                .count(),
-            3
-        );
-    }
 
     #[test]
     fn test_round() {
@@ -254,9 +216,85 @@ mod tests {
     }
 
     #[test]
+    fn test_find_all_edges() {
+        let (graph, graph_idx) = read_graph(
+            PathBuf::from("test/example.tsv"),
+            false,
+            "column_7".to_string(),
+            Some("column_7 > 0.2".to_string()),
+            false,
+            4,
+        );
+        assert_eq!(graph.edges(graph_idx["NC_046966.1:26131"]).count(), 5);
+    }
+
+    #[test]
+    fn test_find_dir_edges() {
+        let (graph, graph_idx) = read_graph(
+            PathBuf::from("test/example.tsv"),
+            false,
+            "column_7".to_string(),
+            Some("column_7 > 0.2".to_string()),
+            false,
+            4,
+        );
+        assert_eq!(
+            graph
+                .edges_directed(graph_idx["NC_046966.1:26131"], petgraph::Outgoing)
+                .count(),
+            3
+        );
+    }
+
+    #[test]
+    fn test_get_nodes_weight() {
+        let (graph, _graph_idx) = read_graph(
+            PathBuf::from("test/example.tsv"),
+            false,
+            "column_7".to_string(),
+            Some("column_7 > 0.2".to_string()),
+            false,
+            4,
+        );
+
+        let nodes_weight = get_nodes_weight(graph.node_indices(), &graph);
+        assert_eq!(
+            graph.node_weight(nodes_weight[0].0).unwrap(),
+            "NC_046966.1:12856"
+        );
+        assert_eq!(nodes_weight[0].1, 0.9998);
+        assert_eq!(
+            graph.node_weight(nodes_weight[1].0).unwrap(),
+            "NC_046966.1:13197"
+        );
+        assert_eq!(nodes_weight[1].1, 0.8519);
+        assert_eq!(
+            graph.node_weight(nodes_weight[2].0).unwrap(),
+            "NC_046966.1:13594"
+        );
+        assert_eq!(nodes_weight[2].1, 1.5552);
+        assert_eq!(
+            graph.node_weight(nodes_weight[3].0).unwrap(),
+            "NC_046966.1:7391"
+        );
+        assert_eq!(nodes_weight[3].1, 1.0504);
+        assert_eq!(
+            graph.node_weight(nodes_weight[4].0).unwrap(),
+            "NC_046966.1:7468"
+        );
+        assert_eq!(nodes_weight[4].1, 0.4336);
+    }
+
+    #[test]
     fn test_find_heaviest_node() {
-        let (graph, _graph_idx) =
-            read_graph(PathBuf::from("test/example.tsv"), false, 7, false, 0.2, 4);
+        let (graph, _graph_idx) = read_graph(
+            PathBuf::from("test/example.tsv"),
+            false,
+            "column_7".to_string(),
+            Some("column_7 > 0.2".to_string()),
+            false,
+            4,
+        );
 
         let (node_heaviest, node_weight) = find_heaviest_node(&graph, None);
         assert_eq!(
@@ -270,8 +308,14 @@ mod tests {
     fn test_find_connected_components() {
         use petgraph::algo::{kosaraju_scc, tarjan_scc};
 
-        let (graph, _graph_idx) =
-            read_graph(PathBuf::from("test/example.tsv"), false, 7, false, 0.2, 4);
+        let (graph, _graph_idx) = read_graph(
+            PathBuf::from("test/example.tsv"),
+            false,
+            "column_7".to_string(),
+            Some("column_7 > 0.2".to_string()),
+            false,
+            4,
+        );
 
         let ccs = tarjan_scc(&graph);
         assert_eq!(ccs.len(), 13);
