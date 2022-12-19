@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
-pub fn read_graph(
+pub fn graph_read(
     tsv: PathBuf,
     has_header: bool,
     weight_field: String,
@@ -151,9 +151,17 @@ pub fn read_graph(
     return (graph, graph_idx);
 }
 
-fn round(x: f64, decimals: i32) -> f64 {
-    let y = 10f64.powi(decimals);
-    (x * y).round() / y
+pub fn graph_subset(graph: &mut StableGraph<String, f32>, subset: PathBuf) -> usize {
+    let mut nodes_subset = Vec::<String>::new();
+    let in_reader = BufReader::new(File::open(subset).expect("cannot open subset file"));
+    for node in in_reader.lines() {
+        nodes_subset.push(node.expect("cannot read node from subset file"));
+    }
+    debug!("Nodes to include: {:?}", nodes_subset);
+
+    graph.retain_nodes(|g, ix| nodes_subset.contains(&g[ix]));
+
+    return nodes_subset.len();
 }
 
 fn get_nodes_weight<I>(iter: I, g: &StableGraph<String, f32>) -> Vec<(NodeIndex, f32)>
@@ -199,6 +207,11 @@ pub fn find_heaviest_node(
     return nodes_weight[0];
 }
 
+fn round(x: f64, decimals: i32) -> f64 {
+    let y = 10f64.powi(decimals);
+    (x * y).round() / y
+}
+
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
@@ -216,8 +229,37 @@ mod tests {
     }
 
     #[test]
+    fn test_graph_read() {
+        let (graph, _graph_idx) = graph_read(
+            PathBuf::from("test/example.tsv"),
+            false,
+            "column_7".to_string(),
+            Some("column_7 > 0.2".to_string()),
+            false,
+            4,
+        );
+        assert_eq!(graph.node_count(), 65);
+        assert_eq!(graph.edge_count(), 196);
+    }
+
+    #[test]
+    fn test_graph_subset() {
+        let (mut graph, _graph_idx) = graph_read(
+            PathBuf::from("test/example.tsv"),
+            false,
+            "column_7".to_string(),
+            Some("column_7 > 0.2".to_string()),
+            false,
+            4,
+        );
+        graph_subset(&mut graph, PathBuf::from("test/example.subset"));
+        assert_eq!(graph.node_count(), 11);
+        assert_eq!(graph.edge_count(), 44);
+    }
+
+    #[test]
     fn test_find_all_edges() {
-        let (graph, graph_idx) = read_graph(
+        let (graph, graph_idx) = graph_read(
             PathBuf::from("test/example.tsv"),
             false,
             "column_7".to_string(),
@@ -230,7 +272,7 @@ mod tests {
 
     #[test]
     fn test_find_dir_edges() {
-        let (graph, graph_idx) = read_graph(
+        let (graph, graph_idx) = graph_read(
             PathBuf::from("test/example.tsv"),
             false,
             "column_7".to_string(),
@@ -248,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_get_nodes_weight() {
-        let (graph, _graph_idx) = read_graph(
+        let (graph, _graph_idx) = graph_read(
             PathBuf::from("test/example.tsv"),
             false,
             "column_7".to_string(),
@@ -287,7 +329,7 @@ mod tests {
 
     #[test]
     fn test_find_heaviest_node() {
-        let (graph, _graph_idx) = read_graph(
+        let (graph, _graph_idx) = graph_read(
             PathBuf::from("test/example.tsv"),
             false,
             "column_7".to_string(),
@@ -308,7 +350,7 @@ mod tests {
     fn test_find_connected_components() {
         use petgraph::algo::{kosaraju_scc, tarjan_scc};
 
-        let (graph, _graph_idx) = read_graph(
+        let (graph, _graph_idx) = graph_read(
             PathBuf::from("test/example.tsv"),
             false,
             "column_7".to_string(),

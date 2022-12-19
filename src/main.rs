@@ -1,13 +1,12 @@
 use clap::Parser;
 use itertools::sorted;
-use log::{debug, error, info, trace, warn};
+use log::{error, info, trace, warn};
 use petgraph::algo::tarjan_scc;
 use petgraph::dot::Dot;
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
 use std::fs::File;
 use std::io::Write;
-use std::io::{BufRead, BufReader};
 use std::time::Instant;
 mod graph;
 mod parse_args;
@@ -42,7 +41,7 @@ fn main() {
 
     // Read TSV into graph
     info!("Creating graph...");
-    let (mut graph, _graph_idx) = crate::graph::read_graph(
+    let (mut graph, _graph_idx) = crate::graph::graph_read(
         args.input,
         args.header,
         args.weight_field,
@@ -54,17 +53,8 @@ fn main() {
     // Open subset file
     if args.subset.is_some() {
         info!("Subsetting nodes based on input file...");
-        let mut nodes_subset = Vec::<String>::new();
-        let in_reader = BufReader::new(
-            File::open(args.subset.as_ref().expect("invalid subset option"))
-                .expect("cannot open subset file"),
-        );
-        for node in in_reader.lines() {
-            nodes_subset.push(node.expect("cannot read node from subset file"));
-        }
-        debug!("Nodes to include: {:?}", nodes_subset);
+        crate::graph::graph_subset(&mut graph, args.subset.expect("invalid subset option"));
 
-        graph.retain_nodes(|g, ix| nodes_subset.contains(&g[ix]));
         info!(
             "Graph has {0} nodes with {1} edges",
             graph.node_count(),
@@ -139,7 +129,7 @@ fn main() {
         }
     }
     info!(
-        "Pruning complete! Pruned graph has {0} nodes with {1} edges",
+        "Pruning complete! Final graph has {0} nodes with {1} edges",
         graph.node_count(),
         graph.edge_count()
     );
