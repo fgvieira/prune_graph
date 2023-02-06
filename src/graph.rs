@@ -31,9 +31,6 @@ pub fn graph_read(
 
     // Create graph
     let mut graph = petgraph::stable_graph::StableGraph::<String, f32, Undirected>::default();
-    if graph.is_directed() {
-        error!("Graph has to be undirected!");
-    }
     let mut graph_idx = HashMap::new();
 
     // Read the file line by line
@@ -226,6 +223,7 @@ mod tests {
             false,
             4,
         );
+        assert_eq!(graph.is_directed(), false)
         assert_eq!(graph.node_count(), 65);
         assert_eq!(graph.edge_count(), 98);
     }
@@ -240,6 +238,7 @@ mod tests {
             false,
             4,
         );
+        assert_eq!(graph.is_directed(), false);
         graph_subset(&mut graph, PathBuf::from("test/example.subset"));
         assert_eq!(graph.node_count(), 11);
         assert_eq!(graph.edge_count(), 22);
