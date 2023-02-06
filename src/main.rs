@@ -15,7 +15,6 @@ mod parse_args;
 - ARGS: value_enum for log_level
 - ARGS: show type of option, and not name
 - read/write from file/std
-- GRAPH: undirected graph
 - write vector to file
 */
 fn main() {

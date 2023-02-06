@@ -1,5 +1,6 @@
 use log::{debug, error, info, trace, warn};
 use petgraph::stable_graph::{NodeIndex, StableGraph};
+use petgraph::Undirected;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -12,7 +13,7 @@ pub fn graph_read(
     weight_filter: Option<String>,
     weight_n_edges: bool,
     weight_precision: u8,
-) -> (StableGraph<String, f32>, HashMap<String, NodeIndex>) {
+) -> (StableGraph<String, f32, Undirected>, HashMap<String, NodeIndex>) {
     // Open input file
     let input: Box<dyn std::io::Read + 'static> = if tsv.as_os_str().eq("-") {
         Box::new(std::io::stdin())
@@ -29,10 +30,7 @@ pub fn graph_read(
     //let in_reader = BufReader::new(File::open(tsv).expect("cannot open input file"));
 
     // Create graph
-    let mut graph = StableGraph::<String, f32>::new();
-    //let mut graph = petgraph::stable_graph::StableGraph::<String, f32, petgraph::Undirected>::new();
-    //let mut graph = petgraph::stable_graph::StableGraph::<String, f32>::new_undirected();
-    //let mut graph = petgraph::stable_graph::StableUnGraph::<String, f32>::new();
+    let mut graph = petgraph::stable_graph::StableGraph::<String, f32, Undirected>::default();
     if graph.is_directed() {
         error!("Graph has to be undirected!");
     }
@@ -120,16 +118,6 @@ pub fn graph_read(
                     edge_weights[&weight_field].clone() as f32
                 },
             );
-            // Add other edge, until "Undirected" is implemented
-            let _e2 = graph.add_edge(
-                graph_idx[&edge[1]],
-                graph_idx[&edge[0]],
-                if weight_n_edges {
-                    1.0
-                } else {
-                    edge_weights[&weight_field].clone() as f32
-                },
-            );
         }
     }
 
@@ -151,7 +139,7 @@ pub fn graph_read(
     return (graph, graph_idx);
 }
 
-pub fn graph_subset(graph: &mut StableGraph<String, f32>, subset: PathBuf) -> usize {
+pub fn graph_subset(graph: &mut StableGraph<String, f32, Undirected>, subset: PathBuf) -> usize {
     let mut nodes_subset = Vec::<String>::new();
     let in_reader = BufReader::new(File::open(subset).expect("cannot open subset file"));
     for node in in_reader.lines() {
@@ -164,7 +152,7 @@ pub fn graph_subset(graph: &mut StableGraph<String, f32>, subset: PathBuf) -> us
     return nodes_subset.len();
 }
 
-fn get_nodes_weight<I>(iter: I, g: &StableGraph<String, f32>) -> Vec<(NodeIndex, f32)>
+fn get_nodes_weight<I>(iter: I, g: &StableGraph<String, f32, Undirected>) -> Vec<(NodeIndex, f32)>
 where
     I: Iterator<Item = NodeIndex>,
 {
@@ -180,7 +168,7 @@ where
 }
 
 pub fn find_heaviest_node(
-    g: &StableGraph<String, f32>,
+    g: &StableGraph<String, f32, Undirected>,
     nodes_idx: Option<&Vec<NodeIndex>>,
 ) -> (NodeIndex, f32) {
     // Calculate each node's weight
@@ -239,7 +227,7 @@ mod tests {
             4,
         );
         assert_eq!(graph.node_count(), 65);
-        assert_eq!(graph.edge_count(), 196);
+        assert_eq!(graph.edge_count(), 98);
     }
 
     #[test]
@@ -254,7 +242,7 @@ mod tests {
         );
         graph_subset(&mut graph, PathBuf::from("test/example.subset"));
         assert_eq!(graph.node_count(), 11);
-        assert_eq!(graph.edge_count(), 44);
+        assert_eq!(graph.edge_count(), 22);
     }
 
     #[test]
@@ -268,24 +256,6 @@ mod tests {
             4,
         );
         assert_eq!(graph.edges(graph_idx["NC_046966.1:26131"]).count(), 5);
-    }
-
-    #[test]
-    fn test_find_dir_edges() {
-        let (graph, graph_idx) = graph_read(
-            PathBuf::from("test/example.tsv"),
-            false,
-            "column_7".to_string(),
-            Some("column_7 > 0.2".to_string()),
-            false,
-            4,
-        );
-        assert_eq!(
-            graph
-                .edges_directed(graph_idx["NC_046966.1:26131"], petgraph::Outgoing)
-                .count(),
-            3
-        );
     }
 
     #[test]
