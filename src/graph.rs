@@ -223,7 +223,7 @@ mod tests {
             false,
             4,
         );
-        assert_eq!(graph.is_directed(), false)
+        assert_eq!(graph.is_directed(), false);
         assert_eq!(graph.node_count(), 65);
         assert_eq!(graph.edge_count(), 98);
     }
