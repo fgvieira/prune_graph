@@ -1,42 +1,34 @@
 use log::{debug, error, info, trace, warn};
-use petgraph::stable_graph::{NodeIndex, StableGraph};
-use petgraph::Undirected;
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use petgraph::{
+    stable_graph::{NodeIndex, StableGraph},
+    Undirected,
+};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufRead, BufReader},
+    path::PathBuf,
+};
 
-pub fn graph_read(
-    tsv: PathBuf,
+pub fn graph_read<R: BufRead>(
+    reader: R,
     has_header: bool,
     weight_field: String,
     weight_filter: Option<String>,
     weight_n_edges: bool,
     weight_precision: u8,
-) -> (StableGraph<String, f32, Undirected>, HashMap<String, NodeIndex>) {
-    // Open input file
-    let input: Box<dyn std::io::Read + 'static> = if tsv.as_os_str().eq("-") {
-        Box::new(std::io::stdin())
-    } else {
-        //match File::open(&tsv) {
-        //    Ok(file) => Box::new(file),
-        //    Err(err) => {
-        //        error!("{}: {}", tsv.display(), err);
-        //    }
-        //}
-        Box::new(File::open(tsv).expect("ERROR MESSAGE NOT WORKING!"))
-    };
-    let in_reader = BufReader::new(input);
-    //let in_reader = BufReader::new(File::open(tsv).expect("cannot open input file"));
-
+) -> (
+    StableGraph<String, f32, Undirected>,
+    HashMap<String, NodeIndex>,
+) {
     // Create graph
-    let mut graph = petgraph::stable_graph::StableGraph::<String, f32, Undirected>::default();
+    let mut graph = StableGraph::<String, f32, Undirected>::default();
     let mut graph_idx = HashMap::new();
 
     // Read the file line by line
     let mut header: Vec<String> = Vec::new();
     let mut n_lines: usize = 0;
-    for (index, line) in in_reader.lines().enumerate() {
+    for (index, line) in reader.lines().enumerate() {
         let line = line.expect("cannot read line from input file");
 
         //let edge: Vec<&str> = line.split('\t').collect();
@@ -78,9 +70,9 @@ pub fn graph_read(
                 .skip(2)
                 .map(|x| {
                     round(
-                        x.parse::<f64>().expect("cannot convert weight to float64"),
+                        x.parse::<f32>().expect("cannot convert weight to float32"),
                         weight_precision.into(),
-                    )
+                    ) as f64
                 })
                 .enumerate()
                 .map(|(i, w)| (header[i + 2].clone(), w))
@@ -138,8 +130,8 @@ pub fn graph_read(
 
 pub fn graph_subset(graph: &mut StableGraph<String, f32, Undirected>, subset: PathBuf) -> usize {
     let mut nodes_subset = Vec::<String>::new();
-    let in_reader = BufReader::new(File::open(subset).expect("cannot open subset file"));
-    for node in in_reader.lines() {
+    let reader_file = BufReader::new(File::open(subset).expect("cannot open subset file"));
+    for node in reader_file.lines() {
         nodes_subset.push(node.expect("cannot read node from subset file"));
     }
     debug!("Nodes to include: {:?}", nodes_subset);
@@ -192,8 +184,8 @@ pub fn find_heaviest_node(
     return nodes_weight[0];
 }
 
-fn round(x: f64, decimals: i32) -> f64 {
-    let y = 10f64.powi(decimals);
+fn round(x: f32, decimals: i32) -> f32 {
+    let y = 10f32.powi(decimals);
     (x * y).round() / y
 }
 
@@ -216,7 +208,7 @@ mod tests {
     #[test]
     fn test_graph_read() {
         let (graph, _graph_idx) = graph_read(
-            PathBuf::from("test/example.tsv"),
+            BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             false,
             "column_7".to_string(),
             Some("column_7 > 0.2".to_string()),
@@ -231,7 +223,7 @@ mod tests {
     #[test]
     fn test_graph_subset() {
         let (mut graph, _graph_idx) = graph_read(
-            PathBuf::from("test/example.tsv"),
+            BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             false,
             "column_7".to_string(),
             Some("column_7 > 0.2".to_string()),
@@ -247,7 +239,7 @@ mod tests {
     #[test]
     fn test_find_all_edges() {
         let (graph, graph_idx) = graph_read(
-            PathBuf::from("test/example.tsv"),
+            BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             false,
             "column_7".to_string(),
             Some("column_7 > 0.2".to_string()),
@@ -260,7 +252,7 @@ mod tests {
     #[test]
     fn test_get_nodes_weight() {
         let (graph, _graph_idx) = graph_read(
-            PathBuf::from("test/example.tsv"),
+            BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             false,
             "column_7".to_string(),
             Some("column_7 > 0.2".to_string()),
@@ -299,7 +291,7 @@ mod tests {
     #[test]
     fn test_find_heaviest_node() {
         let (graph, _graph_idx) = graph_read(
-            PathBuf::from("test/example.tsv"),
+            BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             false,
             "column_7".to_string(),
             Some("column_7 > 0.2".to_string()),
@@ -312,7 +304,7 @@ mod tests {
             graph.node_weight(node_heaviest).unwrap(),
             "NC_046966.1:38024"
         );
-        assert_eq!(node_weight, 9.2859);
+        assert_eq!(round(node_weight, 4), 9.2859);
     }
 
     #[test]
@@ -320,7 +312,7 @@ mod tests {
         use petgraph::algo::{kosaraju_scc, tarjan_scc};
 
         let (graph, _graph_idx) = graph_read(
-            PathBuf::from("test/example.tsv"),
+            BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             false,
             "column_7".to_string(),
             Some("column_7 > 0.2".to_string()),

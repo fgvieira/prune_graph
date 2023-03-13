@@ -1,29 +1,34 @@
 use clap::Parser;
 use itertools::sorted;
 use log::{error, info, trace, warn};
-use petgraph::algo::tarjan_scc;
-use petgraph::dot::Dot;
-use rayon::prelude::*;
-use rayon::ThreadPoolBuilder;
-use std::fs::File;
-use std::io::Write;
-use std::time::Instant;
+use petgraph::{algo::tarjan_scc, dot::Dot};
+use rayon::{prelude::*, ThreadPoolBuilder};
+use std::{
+    fs::File,
+    io::{stdin, stdout, BufReader, Write},
+    time::Instant,
+};
 mod graph;
 mod parse_args;
 
-/*
-- ARGS: value_enum for log_level
-- ARGS: show type of option, and not name
-- read/write from file/std
-- write vector to file
-*/
 fn main() {
     let start_time = Instant::now();
     // Parse command-line arguments
     let args = parse_args::Args::parse();
 
     // Initialize logger
-    flexi_logger::Logger::try_with_str(args.log_level.as_str().to_lowercase())
+    let log_level = if args.quiet {
+        log::LevelFilter::Off
+    } else {
+        match args.verbose {
+            0 => log::LevelFilter::Warn,
+            1 => log::LevelFilter::Info,
+            2 => log::LevelFilter::Debug,
+            _ => log::LevelFilter::Trace,
+        }
+    };
+
+    flexi_logger::Logger::try_with_str(log_level.as_str().to_lowercase())
         .expect("cannot initialize logger")
         .format_for_stderr(crate::parse_args::log_format)
         .start()
@@ -40,14 +45,30 @@ fn main() {
 
     // Read TSV into graph
     info!("Creating graph...");
-    let (mut graph, _graph_idx) = crate::graph::graph_read(
-        args.input,
-        args.header,
-        args.weight_field,
-        args.weight_filter,
-        args.weight_n_edges,
-        args.weight_precision,
-    );
+    let (mut graph, _graph_idx) = if args.input.is_some() {
+        info!("Reading from input file...");
+        let reader_file =
+            BufReader::new(File::open(args.input.unwrap()).expect("cannot open input file"));
+        crate::graph::graph_read(
+            reader_file,
+            args.header,
+            args.weight_field,
+            args.weight_filter,
+            args.weight_n_edges,
+            args.weight_precision,
+        )
+    } else {
+        info!("Reading from STDIN...");
+        let reader_stdin = stdin().lock();
+        crate::graph::graph_read(
+            reader_stdin,
+            args.header,
+            args.weight_field,
+            args.weight_filter,
+            args.weight_n_edges,
+            args.weight_precision,
+        )
+    };
 
     // Open subset file
     if args.subset.is_some() {
@@ -72,8 +93,7 @@ fn main() {
         if graph.node_count() > 10000 {
             warn!("Plotting graphs with more than 10000 nodes can be slow and not very informative")
         }
-        let mut out_graph =
-            std::fs::File::create(args.out_graph.unwrap()).expect("cannot open graph file!");
+        let mut out_graph = File::create(args.out_graph.unwrap()).expect("cannot open graph file!");
         let output = format!("{}", Dot::new(&graph));
         out_graph
             .write_all(&output.as_bytes())
@@ -134,32 +154,39 @@ fn main() {
     );
 
     info!("Saving remaining nodes...");
-    let mut out_fh = File::create(args.out).expect("cannot open output file");
-    //out_fh.write(graph.node_weights().map(|x| -> String {x.push('\n')}).collect().concat().as_bytes()).unwrap();
-    //out_fh.write(graph.node_weights().cloned().intersperse("\n".to_string()).collect::<String>().as_bytes()).unwrap();
-    for node_weight in sorted(graph.node_weights()) {
-        let mut x: String = node_weight.to_string();
-        x.push('\n');
-        out_fh
-            .write(x.as_bytes())
-            .expect("cannot write to output file");
+    if args.out.is_some() {
+        let mut writer_file = File::create(args.out.unwrap()).expect("cannot open output file");
+        write(&mut writer_file, &mut graph.node_weights())
+            .expect("cannot write results to output file");
+    } else {
+        write(&mut stdout().lock(), &mut graph.node_weights())
+            .expect("cannot write results to stdout");
     }
 
     if args.out_excl.is_some() {
-        info!("Saving prunned nodes to file...");
-        let mut out_fh = File::create(args.out_excl.unwrap())
+        info!("Saving excluded nodes to file...");
+        let mut writer_file = File::create(args.out_excl.unwrap())
             .expect("cannot open output file for excluded nodes");
-        for node in sorted(nodes_excl) {
-            let mut x: String = node.to_string();
-            x.push('\n');
-            out_fh
-                .write(x.as_bytes())
-                .expect("cannot write excluded nodes to file");
-        }
+        write(&mut writer_file, &mut graph.node_weights())
+            .expect("cannot write excluded nodes to file");
     }
 
     info!(
         "Total runtime: {:.2} mins",
         start_time.elapsed().as_secs() as f32 / 60.0
     );
+}
+
+fn write<W, T>(writer: &mut W, vec: &mut T) -> std::io::Result<()>
+where
+    W: std::io::Write,
+    T: std::iter::Iterator,
+    <T as Iterator>::Item: std::fmt::Display,
+    <T as Iterator>::Item: Ord,
+{
+    for item in sorted(vec) {
+        writeln!(writer, "{item}")?;
+    }
+
+    Ok(())
 }

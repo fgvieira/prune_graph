@@ -1,5 +1,5 @@
 # Prune Graph
-Fast graph pruning.
+Fast pruning of arbitrary graphs.
 
 ### Instalation
 Clone repository:
@@ -23,7 +23,7 @@ cargo test
 ```
 or:
 ```
-zcat input.tsv.gz | ./prune_graph --out out.keep
+zcat input.tsv.gz | ./prune_graph > out.keep
 ```
 
 To plot the graph (optional)
@@ -33,7 +33,7 @@ cat out.dot | dot -Tsvg > out.svg
 
 If you want to get a full list of option, just run:
 ```
-./prune_graph -h
+./prune_graph --help
 ```
 
 ### Input data
@@ -46,7 +46,7 @@ cat test/example.tsv | mlr --tsv --implicit-csv-header put '$5 = abs($5)' | ./pr
 ```
 
 ### Filter edges
-To filter edges, you can use option `--weight-filter` with any expression supported by [fasteval](https://crates.io/crates/fasteval). For example, to use column 7 as weight and only consider edges with `weight > 0.2`:
+To filter edges, you can use option `--weight-filter` with any expression supported by [fasteval](https://crates.io/crates/fasteval). For example, to use column 7 as weight and only consider edges `> 0.2`:
 ```
 cat test/example.tsv | ./prune_graph --weight-field "column_7" --weight-filter "column_7 > 0.2" --out out.keep
 ```
@@ -60,4 +60,4 @@ cat test/example.tsv | ./prune_graph --weight-field "column_7" --weight-filter "
 ```
 
 ### Output
-The output will be a list of the remaining nodes after pruning. Optionally, you can also get a list of the files that were removed (`--out-excl`).
+The output will be a list of the remaining nodes after pruning. Optionally, you can also get a list of the nodes that were removed (`--out-excl`).
