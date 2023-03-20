@@ -167,7 +167,7 @@ fn main() {
         info!("Saving excluded nodes to file...");
         let mut writer_file = File::create(args.out_excl.unwrap())
             .expect("cannot open output file for excluded nodes");
-        write(&mut writer_file, &mut graph.node_weights())
+        write(&mut writer_file, &mut sorted(nodes_excl))
             .expect("cannot write excluded nodes to file");
     }
 
