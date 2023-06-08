@@ -54,6 +54,14 @@ pub fn graph_read<R: BufRead>(
         }
         n_lines += 1;
 
+        // Check number of fields
+        if edge.len() != header.len() {
+            let edge_len = edge.len();
+            let header_len = header.len();
+            error!("edge {n_lines} has {edge_len} fields, while header has {header_len}");
+            std::process::exit(-1);
+        }
+
         // Check if nodes exist and add them if not
         if !graph_idx.contains_key(&edge[0]) {
             graph_idx.insert(edge[0].clone(), graph.add_node(edge[0].clone()));
