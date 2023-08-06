@@ -330,7 +330,19 @@ mod tests {
 
         let ccs = tarjan_scc(&graph);
         assert_eq!(ccs.len(), 13);
+        for (i, n) in Vec::<usize>::from([4, 30, 7, 1, 3, 12, 2, 1, 1, 1, 1, 1, 1])
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(ccs[i].len(), *n);
+        }
         let ccs = kosaraju_scc(&graph);
         assert_eq!(ccs.len(), 13);
+        for (i, n) in Vec::<usize>::from([1, 1, 1, 1, 1, 1, 2, 12, 3, 1, 7, 30, 4])
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(ccs[i].len(), *n);
+        }
     }
 }
