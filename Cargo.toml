@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
 log = "0.4"
-flexi_logger = "0.24"
-itertools = "0.10"
+flexi_logger = "0.25"
+itertools = "0.11"
 petgraph = "0.6"
-rayon = "1.5"
+rayon = "1.7"
 fasteval = "0.2"
