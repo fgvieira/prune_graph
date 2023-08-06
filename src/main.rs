@@ -1,7 +1,7 @@
 use clap::Parser;
 use itertools::sorted;
 use log::{error, info, trace, warn};
-use petgraph::{algo::tarjan_scc, dot::Dot};
+use petgraph::{algo::kosaraju_scc, dot::Dot};
 use rayon::{prelude::*, ThreadPoolBuilder};
 use std::{
     fs::File,
@@ -125,7 +125,7 @@ fn main() {
             delta_n_nodes = 0
         }
 
-        let nodes_heavy: Vec<(petgraph::stable_graph::NodeIndex, f32)> = tarjan_scc(&graph)
+        let nodes_heavy: Vec<(petgraph::stable_graph::NodeIndex, f32)> = kosaraju_scc(&graph)
             .par_iter()
             .filter(|x| x.len() > 1)
             .map(|x| crate::graph::find_heaviest_node(&graph, Some(x)))
