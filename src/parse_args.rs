@@ -72,7 +72,7 @@ pub struct Args {
     /// Weight as number of edges.
     ///
     /// Node's weight as number of connected edges, instead of (default) summing over their weights.
-    #[clap(short = 'n', long)]
+    #[clap(long)]
     pub weight_n_edges: bool,
 
     /// Weight precision.
