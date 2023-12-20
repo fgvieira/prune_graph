@@ -63,6 +63,7 @@ pub fn graph_read<R: BufRead>(
         }
 
         // Check if nodes exist and add them if not
+        // Node label is stored as its "weight"
         if !graph_idx.contains_key(&edge[0]) {
             graph_idx.insert(edge[0].clone(), graph.add_node(edge[0].clone()));
         }
@@ -90,6 +91,7 @@ pub fn graph_read<R: BufRead>(
         // Debug
         if index < 10 {
             debug!("{:?}", edge);
+            debug!("{:?}", graph.node_weight(graph_idx[&edge[0]]));
             debug!("{:?}", edge_weights);
         }
 
@@ -149,19 +151,24 @@ pub fn graph_subset(graph: &mut StableGraph<String, f32, Undirected>, subset: Pa
     return nodes_subset.len();
 }
 
+fn get_node_weight(
+    node_idx: NodeIndex,
+    g: &StableGraph<String, f32, Undirected>,
+) -> (NodeIndex, f32) {
+    return (
+        node_idx,
+        g.edges(node_idx)
+            .map(|edge| -> &f32 { edge.weight() })
+            .sum::<f32>(),
+    );
+}
+
 fn get_nodes_weight<I>(iter: I, g: &StableGraph<String, f32, Undirected>) -> Vec<(NodeIndex, f32)>
 where
     I: Iterator<Item = NodeIndex>,
 {
-    iter.map(|node_idx| {
-        (
-            node_idx,
-            g.edges(node_idx)
-                .map(|edge| -> &f32 { edge.weight() })
-                .sum::<f32>(),
-        )
-    })
-    .collect()
+    iter.map(|node_idx| get_node_weight(node_idx, g))
+        .collect()
 }
 
 pub fn find_heaviest_node(
@@ -255,6 +262,25 @@ mod tests {
             4,
         );
         assert_eq!(graph.edges(graph_idx["NC_046966.1:26131"]).count(), 5);
+    }
+
+    #[test]
+    fn test_get_node_weight() {
+        let (graph, graph_idx) = graph_read(
+            BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
+            false,
+            "column_7".to_string(),
+            Some("column_7 > 0.2".to_string()),
+            false,
+            4,
+        );
+
+        let nodes_weight = get_node_weight(graph_idx["NC_046966.1:12856"], &graph);
+        assert_eq!(
+            graph.node_weight(nodes_weight.0).unwrap(),
+            "NC_046966.1:12856"
+        );
+        assert_eq!(nodes_weight.1, 0.9998);
     }
 
     #[test]

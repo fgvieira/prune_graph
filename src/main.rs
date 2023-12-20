@@ -125,6 +125,7 @@ fn main() {
             delta_n_nodes = 0
         }
 
+        // Find heaviest nodes
         let nodes_heavy: Vec<(petgraph::stable_graph::NodeIndex, f32)> = kosaraju_scc(&graph)
             .par_iter()
             .filter(|x| x.len() > 1)
@@ -132,6 +133,7 @@ fn main() {
             .collect();
         trace!("{:?}", nodes_heavy);
 
+        // Process heaviest nodes
         for (node_heavy, _node_heavy_weight) in nodes_heavy {
             if args.keep_heavy {
                 let mut nodes_del = graph.neighbors_undirected(node_heavy).detach();
