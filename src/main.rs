@@ -1,8 +1,8 @@
 use clap::Parser;
 use itertools::sorted;
 use log::{error, info, trace, warn};
-use petgraph::{algo::kosaraju_scc, dot::Dot};
-use rayon::{prelude::*, ThreadPoolBuilder};
+use petgraph::dot::Dot;
+use rayon::ThreadPoolBuilder;
 use std::{
     fs::File,
     io::{stdin, stdout, BufReader, Write},
@@ -117,7 +117,7 @@ fn main() {
                 "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges.",
                 delta_n_nodes,
                 delta_time.as_secs(),
-                delta_n_nodes as f32 / delta_time.as_secs() as f32,
+                delta_n_nodes as f32 / delta_time.as_secs_f32(),
                 graph.node_count(),
                 graph.edge_count()
             );
@@ -126,27 +126,21 @@ fn main() {
         }
 
         // Find heaviest nodes
-        let nodes_heavy: Vec<(petgraph::stable_graph::NodeIndex, f32)> = kosaraju_scc(&graph)
-            .par_iter()
-            .filter(|x| x.len() > 1)
-            .map(|x| crate::graph::find_heaviest_node(&graph, Some(x)))
-            .collect();
-        trace!("{:?}", nodes_heavy);
+        let (node_heavy, _node_heavy_weight) = crate::graph::find_heaviest_node(&graph);
+        trace!("{:?}", node_heavy);
 
-        // Process heaviest nodes
-        for (node_heavy, _node_heavy_weight) in nodes_heavy {
-            if args.keep_heavy {
-                let mut nodes_del = graph.neighbors_undirected(node_heavy).detach();
-                while let Some(node_neighb) = nodes_del.next_node(&graph) {
-                    nodes_excl.push(graph.node_weight(node_neighb).unwrap().to_string());
-                    graph.remove_node(node_neighb);
-                    delta_n_nodes += 1;
-                }
-            } else {
-                nodes_excl.push(graph.node_weight(node_heavy).unwrap().to_string());
-                graph.remove_node(node_heavy);
+        // Process heaviest node
+        if args.keep_heavy {
+            let mut nodes_del = graph.neighbors_undirected(node_heavy).detach();
+            while let Some(node_neighb) = nodes_del.next_node(&graph) {
+                nodes_excl.push(graph.node_weight(node_neighb).unwrap().to_string());
+                graph.remove_node(node_neighb);
                 delta_n_nodes += 1;
             }
+        } else {
+            nodes_excl.push(graph.node_weight(node_heavy).unwrap().to_string());
+            graph.remove_node(node_heavy);
+            delta_n_nodes += 1;
         }
     }
     info!(

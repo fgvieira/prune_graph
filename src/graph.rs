@@ -3,6 +3,7 @@ use petgraph::{
     stable_graph::{NodeIndex, StableGraph},
     Undirected,
 };
+use rayon::prelude::*;
 use std::{
     collections::HashMap,
     fs::File,
@@ -152,34 +153,28 @@ pub fn graph_subset(graph: &mut StableGraph<String, f32, Undirected>, subset: Pa
 }
 
 fn get_node_weight(
-    node_idx: NodeIndex,
+    node_idx: &NodeIndex,
     g: &StableGraph<String, f32, Undirected>,
 ) -> (NodeIndex, f32) {
     return (
-        node_idx,
-        g.edges(node_idx)
+        *node_idx,
+        g.edges(*node_idx)
             .map(|edge| -> &f32 { edge.weight() })
             .sum::<f32>(),
     );
 }
 
-fn get_nodes_weight<I>(iter: I, g: &StableGraph<String, f32, Undirected>) -> Vec<(NodeIndex, f32)>
-where
-    I: Iterator<Item = NodeIndex>,
-{
-    iter.map(|node_idx| get_node_weight(node_idx, g))
+fn get_nodes_weight(g: &StableGraph<String, f32, Undirected>) -> Vec<(NodeIndex, f32)> {
+    g.node_indices()
+        .collect::<Vec<NodeIndex>>()
+        .par_iter()
+        .map(|node_idx| get_node_weight(node_idx, g))
         .collect()
 }
 
-pub fn find_heaviest_node(
-    g: &StableGraph<String, f32, Undirected>,
-    nodes_idx: Option<&Vec<NodeIndex>>,
-) -> (NodeIndex, f32) {
+pub fn find_heaviest_node(g: &StableGraph<String, f32, Undirected>) -> (NodeIndex, f32) {
     // Calculate each node's weight
-    let mut nodes_weight = nodes_idx.map_or_else(
-        || get_nodes_weight(g.node_indices(), g),
-        |vec| get_nodes_weight(vec.into_iter().copied(), g),
-    );
+    let mut nodes_weight = get_nodes_weight(g);
 
     //Sort nodes based on connected edge weight and then alphabetically
     nodes_weight.sort_by(|a, b| {
@@ -275,7 +270,7 @@ mod tests {
             4,
         );
 
-        let nodes_weight = get_node_weight(graph_idx["NC_046966.1:12856"], &graph);
+        let nodes_weight = get_node_weight(&graph_idx["NC_046966.1:12856"], &graph);
         assert_eq!(
             graph.node_weight(nodes_weight.0).unwrap(),
             "NC_046966.1:12856"
@@ -294,7 +289,7 @@ mod tests {
             4,
         );
 
-        let nodes_weight = get_nodes_weight(graph.node_indices(), &graph);
+        let nodes_weight = get_nodes_weight(&graph);
         assert_eq!(
             graph.node_weight(nodes_weight[0].0).unwrap(),
             "NC_046966.1:12856"
@@ -333,42 +328,11 @@ mod tests {
             4,
         );
 
-        let (node_heaviest, node_weight) = find_heaviest_node(&graph, None);
+        let (node_heaviest, node_weight) = find_heaviest_node(&graph);
         assert_eq!(
             graph.node_weight(node_heaviest).unwrap(),
             "NC_046966.1:38024"
         );
         assert_eq!(round(node_weight, 4), 9.2859);
-    }
-
-    #[test]
-    fn test_find_connected_components() {
-        use petgraph::algo::{kosaraju_scc, tarjan_scc};
-
-        let (graph, _graph_idx) = graph_read(
-            BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
-            false,
-            "column_7".to_string(),
-            Some("column_7 > 0.2".to_string()),
-            false,
-            4,
-        );
-
-        let ccs = tarjan_scc(&graph);
-        assert_eq!(ccs.len(), 13);
-        for (i, n) in Vec::<usize>::from([4, 30, 7, 1, 3, 12, 2, 1, 1, 1, 1, 1, 1])
-            .iter()
-            .enumerate()
-        {
-            assert_eq!(ccs[i].len(), *n);
-        }
-        let ccs = kosaraju_scc(&graph);
-        assert_eq!(ccs.len(), 13);
-        for (i, n) in Vec::<usize>::from([1, 1, 1, 1, 1, 1, 2, 12, 3, 1, 7, 30, 4])
-            .iter()
-            .enumerate()
-        {
-            assert_eq!(ccs[i].len(), *n);
-        }
     }
 }
