@@ -227,7 +227,7 @@ mod tests {
         );
         assert_eq!(graph.is_directed(), false);
         assert_eq!(graph.node_count(), 65);
-        assert_eq!(graph.edge_count(), 98);
+        assert_eq!(graph.edge_count(), 104);
     }
 
     #[test]
@@ -256,7 +256,7 @@ mod tests {
             false,
             4,
         );
-        assert_eq!(graph.edges(graph_idx["NC_046966.1:26131"]).count(), 5);
+        assert_eq!(graph.edges(graph_idx["NC_046966.1:26131"]).count(), 6);
     }
 
     #[test]
@@ -319,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_find_heaviest_node() {
-        let (graph, _graph_idx) = graph_read(
+        let (mut graph, graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             false,
             "column_7".to_string(),
@@ -328,11 +328,52 @@ mod tests {
             4,
         );
 
+	// Round #1
+        let (node_heaviest, node_weight) = find_heaviest_node(&graph);
+        assert_eq!(
+            graph.node_weight(node_heaviest).unwrap(),
+            "NC_046966.1:10729"
+        );
+        assert_eq!(round(node_weight, 4), f32::INFINITY);
+	// Round #2
+	graph.remove_node(graph_idx["NC_046966.1:10729"]);
+        let (node_heaviest, node_weight) = find_heaviest_node(&graph);
+        assert_eq!(
+            graph.node_weight(node_heaviest).unwrap(),
+            "NC_046966.1:26131"
+        );
+        assert_eq!(round(node_weight, 4), f32::INFINITY);
+	// Round #3
+	graph.remove_node(graph_idx["NC_046966.1:26131"]);
+        let (node_heaviest, node_weight) = find_heaviest_node(&graph);
+        assert_eq!(
+            graph.node_weight(node_heaviest).unwrap(),
+            "NC_046966.1:31878"
+        );
+        assert_eq!(round(node_weight, 4), f32::INFINITY);
+	// Round #4
+	graph.remove_node(graph_idx["NC_046966.1:31878"]);
+        let (node_heaviest, node_weight) = find_heaviest_node(&graph);
+        assert_eq!(
+            graph.node_weight(node_heaviest).unwrap(),
+            "NC_046966.1:42518"
+        );
+        assert_eq!(round(node_weight, 4), f32::INFINITY);
+	// Round #5
+	graph.remove_node(graph_idx["NC_046966.1:42518"]);
+        let (node_heaviest, node_weight) = find_heaviest_node(&graph);
+        assert_eq!(
+            graph.node_weight(node_heaviest).unwrap(),
+            "NC_046966.1:45910"
+        );
+        assert_eq!(round(node_weight, 4), f32::INFINITY);
+	// Round #6
+	graph.remove_node(graph_idx["NC_046966.1:45910"]);
         let (node_heaviest, node_weight) = find_heaviest_node(&graph);
         assert_eq!(
             graph.node_weight(node_heaviest).unwrap(),
             "NC_046966.1:38024"
         );
-        assert_eq!(round(node_weight, 4), 9.2859);
+        assert_eq!(round(node_weight, 4), 8.2862);
     }
 }
