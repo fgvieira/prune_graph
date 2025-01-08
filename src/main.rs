@@ -1,4 +1,5 @@
 use clap::Parser;
+use flexi_logger::AdaptiveFormat;
 use itertools::sorted;
 use log::{error, info, trace, warn};
 use petgraph::dot::Dot;
@@ -30,7 +31,7 @@ fn main() {
 
     flexi_logger::Logger::try_with_str(log_level.as_str().to_lowercase())
         .expect("cannot initialize logger")
-        .format_for_stderr(crate::parse_args::log_format)
+        .adaptive_format_for_stderr(AdaptiveFormat::WithThread)
         .start()
         .expect("cannot start logger");
 

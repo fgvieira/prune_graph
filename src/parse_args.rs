@@ -1,25 +1,5 @@
 use clap::{ArgAction, Parser};
-use flexi_logger::{style, DeferredNow, Record};
 use std::path::PathBuf;
-
-#[cfg_attr(docsrs, doc(cfg(feature = "colors")))]
-#[cfg(feature = "colors")]
-pub type log_format =
-    fn(w: &mut dyn Write, now: &mut DeferredNow, record: &Record<'_>) -> Result<(), Error>;
-pub fn log_format(
-    w: &mut dyn std::io::Write,
-    now: &mut DeferredNow,
-    record: &Record,
-) -> Result<(), std::io::Error> {
-    let level = record.level();
-    write!(
-        w,
-        "[{}] {}: {}",
-        style(level).paint(now.format("%Y-%m-%d %H:%M:%S").to_string()),
-        style(level).paint(record.level().to_string()),
-        style(level).paint(&record.args().to_string())
-    )
-}
 
 /// Prune nodes from a graph and output unlinked nodes.
 #[derive(Parser, Debug)]
