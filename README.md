@@ -1,5 +1,5 @@
 # Prune Graph
-Fast pruning of arbitrary graphs.
+Fast pruning of weighted graphs with optional filtering.
 
 ### Instalation
 Clone repository:
