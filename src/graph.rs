@@ -219,9 +219,9 @@ mod tests {
     fn test_graph_read() {
         let (graph, _graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
-            false,
-            "column_7".to_string(),
-            Some("column_7 > 0.2".to_string()),
+            true,
+            "r2".to_string(),
+            Some("r2 > 0.2".to_string()),
             false,
             4,
         );
@@ -234,9 +234,9 @@ mod tests {
     fn test_graph_subset() {
         let (mut graph, _graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
-            false,
-            "column_7".to_string(),
-            Some("column_7 > 0.2".to_string()),
+            true,
+            "r2".to_string(),
+            Some("r2 > 0.2".to_string()),
             false,
             4,
         );
@@ -250,9 +250,9 @@ mod tests {
     fn test_find_all_edges() {
         let (graph, graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
-            false,
-            "column_7".to_string(),
-            Some("column_7 > 0.2".to_string()),
+            true,
+            "r2".to_string(),
+            Some("r2 > 0.2".to_string()),
             false,
             4,
         );
@@ -263,9 +263,9 @@ mod tests {
     fn test_get_node_weight() {
         let (graph, graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
-            false,
-            "column_7".to_string(),
-            Some("column_7 > 0.2".to_string()),
+            true,
+            "r2".to_string(),
+            Some("r2 > 0.2".to_string()),
             false,
             4,
         );
@@ -282,9 +282,9 @@ mod tests {
     fn test_get_nodes_weight() {
         let (graph, _graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
-            false,
-            "column_7".to_string(),
-            Some("column_7 > 0.2".to_string()),
+            true,
+            "r2".to_string(),
+            Some("r2 > 0.2".to_string()),
             false,
             4,
         );
@@ -321,9 +321,9 @@ mod tests {
     fn test_find_heaviest_node() {
         let (mut graph, graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
-            false,
-            "column_7".to_string(),
-            Some("column_7 > 0.2".to_string()),
+            true,
+            "r2".to_string(),
+            Some("r2 > 0.2".to_string()),
             false,
             4,
         );
