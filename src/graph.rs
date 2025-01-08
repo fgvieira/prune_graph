@@ -328,47 +328,47 @@ mod tests {
             4,
         );
 
-	// Round #1
+        // Round #1
         let (node_heaviest, node_weight) = find_heaviest_node(&graph);
         assert_eq!(
             graph.node_weight(node_heaviest).unwrap(),
             "NC_046966.1:10729"
         );
         assert_eq!(round(node_weight, 4), f32::INFINITY);
-	// Round #2
-	graph.remove_node(graph_idx["NC_046966.1:10729"]);
+        // Round #2
+        graph.remove_node(graph_idx["NC_046966.1:10729"]);
         let (node_heaviest, node_weight) = find_heaviest_node(&graph);
         assert_eq!(
             graph.node_weight(node_heaviest).unwrap(),
             "NC_046966.1:26131"
         );
         assert_eq!(round(node_weight, 4), f32::INFINITY);
-	// Round #3
-	graph.remove_node(graph_idx["NC_046966.1:26131"]);
+        // Round #3
+        graph.remove_node(graph_idx["NC_046966.1:26131"]);
         let (node_heaviest, node_weight) = find_heaviest_node(&graph);
         assert_eq!(
             graph.node_weight(node_heaviest).unwrap(),
             "NC_046966.1:31878"
         );
         assert_eq!(round(node_weight, 4), f32::INFINITY);
-	// Round #4
-	graph.remove_node(graph_idx["NC_046966.1:31878"]);
+        // Round #4
+        graph.remove_node(graph_idx["NC_046966.1:31878"]);
         let (node_heaviest, node_weight) = find_heaviest_node(&graph);
         assert_eq!(
             graph.node_weight(node_heaviest).unwrap(),
             "NC_046966.1:42518"
         );
         assert_eq!(round(node_weight, 4), f32::INFINITY);
-	// Round #5
-	graph.remove_node(graph_idx["NC_046966.1:42518"]);
+        // Round #5
+        graph.remove_node(graph_idx["NC_046966.1:42518"]);
         let (node_heaviest, node_weight) = find_heaviest_node(&graph);
         assert_eq!(
             graph.node_weight(node_heaviest).unwrap(),
             "NC_046966.1:45910"
         );
         assert_eq!(round(node_weight, 4), f32::INFINITY);
-	// Round #6
-	graph.remove_node(graph_idx["NC_046966.1:45910"]);
+        // Round #6
+        graph.remove_node(graph_idx["NC_046966.1:45910"]);
         let (node_heaviest, node_weight) = find_heaviest_node(&graph);
         assert_eq!(
             graph.node_weight(node_heaviest).unwrap(),
