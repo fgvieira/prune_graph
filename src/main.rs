@@ -37,7 +37,7 @@ fn main() {
 
     // Create threadpool
     if args.n_threads > 5 {
-        warn!("High number of threads only make sense for HUGE graphs. For must uses 2/3 threads are enough.");
+        warn!("High number of threads is only relevant for very large graphs. For must uses, 2/3 threads are usually enough.");
     }
     ThreadPoolBuilder::new()
         .num_threads(args.n_threads)
@@ -112,7 +112,8 @@ fn main() {
     // Store deleted nodes
     let mut nodes_excl = Vec::<String>::new();
     while graph.edge_count() > 0 {
-        if graph.node_count() % 1000 == 0 {
+        // Report progress
+        if prev_time.elapsed().as_secs() >= 30 && delta_n_nodes != 0{
             let delta_time = prev_time.elapsed();
             info!(
                 "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges.",
