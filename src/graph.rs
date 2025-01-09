@@ -80,7 +80,8 @@ pub fn graph_read<R: BufRead>(
                 .skip(2)
                 .map(|x| {
                     round(
-                        x.parse::<f32>().expect(&format!("cannot convert weight '{x}' to float32")),
+                        x.parse::<f32>()
+                            .expect(&format!("cannot convert weight '{x}' to float32")),
                         weight_precision.into(),
                     ) as f64
                 })

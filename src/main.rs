@@ -35,6 +35,9 @@ fn main() {
         .start()
         .expect("cannot start logger");
 
+    let version = env!("CARGO_PKG_VERSION");
+    info!("prune_graph v{version}");
+
     // Create threadpool
     if args.n_threads > 5 {
         warn!("High number of threads is only relevant for very large graphs. For must uses, 2/3 threads are usually enough.");
@@ -113,7 +116,7 @@ fn main() {
     let mut nodes_excl = Vec::<String>::new();
     while graph.edge_count() > 0 {
         // Report progress
-        if prev_time.elapsed().as_secs() >= 30 && delta_n_nodes != 0{
+        if prev_time.elapsed().as_secs() >= 30 && delta_n_nodes != 0 {
             let delta_time = prev_time.elapsed();
             info!(
                 "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges.",
