@@ -43,9 +43,10 @@ fn main() {
     info!("prune_graph v{version}");
 
     // Create threadpool
-    if args.n_threads > 5 {
-        warn!("High number of threads is only relevant for very large graphs. For must uses, 2/3 threads are usually enough.");
+    if args.n_threads > 20 {
+        warn!("High number of threads is only relevant for very large graphs. For must uses, less than 10 threads is usually enough.");
     }
+
     ThreadPoolBuilder::new()
         .num_threads(args.n_threads)
         .build_global()
@@ -53,9 +54,9 @@ fn main() {
 
     // Read TSV into graph
     let (mut graph, _graph_idx) = if args.input.is_some() {
-        let fh = File::open(&args.input.clone().unwrap()).expect("cannot open input file");
-        if Path::new(&args.input.clone().unwrap()).extension() == Some(OsStr::new("gz")) {
-            info!("Reading input Gzip file {0}", &args.input.unwrap().display().to_string());
+        let fh = File::open(&args.input.as_ref().unwrap()).expect("cannot open input file");
+        if Path::new(&args.input.as_ref().unwrap()).extension() == Some(OsStr::new("gz")) {
+            info!("Reading input Gzip file {:?}", &args.input.unwrap());
             let reader_file_gz = BufReader::with_capacity(128 * 1024, read::GzDecoder::new(fh));
             crate::graph::graph_read(
                 reader_file_gz,
@@ -66,7 +67,7 @@ fn main() {
                 args.weight_precision,
             )
         } else {
-            info!("Reading input file {0}", &args.input.unwrap().display().to_string());
+            info!("Reading input file {:?}", &args.input.unwrap());
             let reader_file = BufReader::new(fh);
             crate::graph::graph_read(
                 reader_file,
@@ -96,14 +97,14 @@ fn main() {
         crate::graph::graph_subset(&mut graph, args.subset.expect("invalid subset option"));
     }
     info!(
-        "Graph has {0} nodes with {1} edges ({2} components).",
+        "Graph has {0} nodes with {1} edges ({2} components)",
         graph.node_count(),
         graph.edge_count(),
         kosaraju_scc(&graph).len(),
     );
 
     if graph.node_count() == 0 {
-        error!("Graph is empty!");
+        error!("Graph is empty");
         std::process::exit(1);
     }
 
@@ -121,9 +122,12 @@ fn main() {
     }
 
     if args.keep_heavy {
-        info!("Pruning neighbors of heaviest position");
+        info!(
+            "Pruning neighbors of heaviest position ({} threads)",
+            args.n_threads
+        );
     } else {
-        info!("Pruning heaviest position");
+        info!("Pruning heaviest position ({} threads)", args.n_threads);
     }
 
     let mut n_iters = 0;
@@ -165,7 +169,7 @@ fn main() {
         if n_iters % 50 == 0 {
             let delta_time = prev_time.elapsed();
             info!(
-                "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges ({5} components).",
+                "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges ({5} components)",
                 delta_n_nodes,
                 delta_time.as_secs(),
                 delta_n_nodes as f32 / delta_time.as_secs_f32(),

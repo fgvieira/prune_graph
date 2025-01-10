@@ -3,6 +3,8 @@ use petgraph::{
     stable_graph::{NodeIndex, StableGraph},
     Undirected,
 };
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
 use std::{
     collections::HashMap,
     fs::File,
@@ -168,7 +170,10 @@ fn get_nodes_weight<I>(iter: I, g: &StableGraph<String, f32, Undirected>) -> Vec
 where
     I: Iterator<Item = NodeIndex>,
 {
-    iter.map(|node_idx| get_node_weight(node_idx, g)).collect()
+    iter.collect::<Vec<NodeIndex>>()
+        .par_iter()
+        .map(|node_idx| get_node_weight(*node_idx, g))
+        .collect()
 }
 
 pub fn find_heaviest_node(
