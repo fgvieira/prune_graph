@@ -64,7 +64,7 @@ The output will be a list of the remaining nodes after pruning. Optionally, you 
 
 
 ## Performance
-Due to the way `prune_graph` parallelizes prunning, its performance is strongly dependent on the degree of connectivity of the graph (see examples below).
+Due to the way `prune_graph` is parallelized, its performance is strongly dependent on the degree of connectivity of the graph (see examples below).
 
 ```
 shuf_seed () {
@@ -78,12 +78,12 @@ shuf_seed () {
 $ N_NODES=10000000
 $ N_EDGES=5000000
 $ seq --equal-width 1 $N_NODES | xargs printf "node_%s\n" > /tmp/nodes.rnd
-$ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 456 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 789 --repeat --input-range 1-250000 --head-count $N_EDGES) | awk '{OFS="\t"; print $0,rand(),rand()}' > example_large.tsv
+$ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 456 --repeat --head-count $N_EDGES /tmp/nodes.rnd) | awk '{OFS="\t"; print $0,rand()}' > example_large.tsv
 ```
 
 ##### Mode 1
 ```
-$ ./target/release/prune_graph -i example_large.tsv --mode 1 --weight-field column_5 -v | wc -l
+$ ./target/release/prune_graph -i example_large.tsv --mode 1 -v | wc -l
 [2025-01-10 15:40:26.840112 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
 [2025-01-10 15:40:26.840262 +01:00] T[main] INFO [src/main.rs:69] Reading input file "example_large.tsv"
 [2025-01-10 15:40:35.254778 +01:00] T[main] INFO [src/main.rs:98] Graph has 6321958 nodes with 5000000 edges (1321959 components)
@@ -95,7 +95,7 @@ $ ./target/release/prune_graph -i example_large.tsv --mode 1 --weight-field colu
 
 ##### Mode 2
 ```
-$ ./target/release/prune_graph -i example_large.tsv --mode 2 --weight-field column_5 -v | wc -l
+$ ./target/release/prune_graph -i example_large.tsv --mode 2 -v | wc -l
 [2025-01-10 15:43:34.998053 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
 [2025-01-10 15:43:34.998253 +01:00] T[main] INFO [src/main.rs:69] Reading input file "example_large.tsv"
 [2025-01-10 15:43:43.749941 +01:00] T[main] INFO [src/main.rs:98] Graph has 6321958 nodes with 5000000 edges (1321959 components)
@@ -114,12 +114,12 @@ $ ./target/release/prune_graph -i example_large.tsv --mode 2 --weight-field colu
 $ N_NODES=100000
 $ N_EDGES=5000000
 $ seq --equal-width 1 $N_NODES | xargs printf "node_%s\n" > /tmp/nodes.rnd
-$ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 456 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 789 --repeat --input-range 1-250000 --head-count $N_EDGES) | awk '{OFS="\t"; print $0,rand(),rand()}' > example_1comp.tsv
+$ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 456 --repeat --head-count $N_EDGES /tmp/nodes.rnd) | awk '{OFS="\t"; print $0,rand()}' > example_1comp.tsv
 ```
 
 ##### Mode 1
 ```
-$ ./target/release/prune_graph -i example_1comp.tsv --mode 1 --weight-field column_5 -v | wc -l
+$ ./target/release/prune_graph -i example_1comp.tsv --mode 1 -v | wc -l
 [2025-01-10 15:36:06.894498 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
 [2025-01-10 15:36:06.894672 +01:00] T[main] INFO [src/main.rs:69] Reading input file "example_1comp.tsv"
 [2025-01-10 15:36:13.109857 +01:00] T[main] INFO [src/main.rs:98] Graph has 100000 nodes with 5000000 edges (1 components)
@@ -131,7 +131,7 @@ $ ./target/release/prune_graph -i example_1comp.tsv --mode 1 --weight-field colu
 
 ##### Mode 2
 ```
-$ ./target/release/prune_graph -i example_1comp.tsv --mode 2 --weight-field column_5 -v | wc -l
+$ ./target/release/prune_graph -i example_1comp.tsv --mode 2 -v | wc -l
 [2025-01-10 15:37:59.649537 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
 [2025-01-10 15:37:59.649641 +01:00] T[main] INFO [src/main.rs:69] Reading input file "example_1comp.tsv"
 [2025-01-10 15:38:07.339178 +01:00] T[main] INFO [src/main.rs:98] Graph has 100000 nodes with 5000000 edges (1 components)
