@@ -2,8 +2,8 @@ use clap::Parser;
 use flexi_logger::AdaptiveFormat;
 use itertools::sorted;
 use log::{error, info, trace, warn};
-use petgraph::dot::Dot;
-use rayon::ThreadPoolBuilder;
+use petgraph::{algo::kosaraju_scc, dot::Dot};
+use rayon::{prelude::*, ThreadPoolBuilder};
 use std::{
     fs::File,
     io::{stdin, stdout, BufReader, Write},
@@ -78,13 +78,13 @@ fn main() {
     if args.subset.is_some() {
         info!("Subsetting nodes based on input file...");
         crate::graph::graph_subset(&mut graph, args.subset.expect("invalid subset option"));
-
-        info!(
-            "Graph has {0} nodes with {1} edges",
-            graph.node_count(),
-            graph.edge_count()
-        );
     }
+    info!(
+        "Graph has {0} nodes with {1} edges ({2} components).",
+        graph.node_count(),
+        graph.edge_count(),
+        kosaraju_scc(&graph).len(),
+    );
 
     if graph.node_count() == 0 {
         error!("Graph is empty!");
@@ -110,46 +110,61 @@ fn main() {
         info!("Pruning heaviest position...");
     }
 
+    let mut n_iters = 0;
     let mut prev_time = Instant::now();
     let mut delta_n_nodes = 0;
     // Store deleted nodes
     let mut nodes_excl = Vec::<String>::new();
     while graph.edge_count() > 0 {
+        // Find heaviest nodes
+        let nodes_heavy: Vec<(petgraph::stable_graph::NodeIndex, f32)> = if args.mode == 1 {
+            vec![crate::graph::find_heaviest_node(&graph, None)]
+        } else {
+            kosaraju_scc(&graph)
+                .par_iter()
+                .filter(|x| x.len() > 1)
+                .map(|x| crate::graph::find_heaviest_node(&graph, Some(x)))
+                .collect()
+        };
+        trace!("{:?}", nodes_heavy);
+
+        // Process heaviest node
+        for (node_heavy, _node_heavy_weight) in &nodes_heavy {
+            if args.keep_heavy {
+                let mut nodes_del = graph.neighbors_undirected(*node_heavy).detach();
+                while let Some(node_neighb) = nodes_del.next_node(&graph) {
+                    nodes_excl.push(graph.node_weight(node_neighb).unwrap().to_string());
+                    graph.remove_node(node_neighb);
+                    delta_n_nodes += 1;
+                }
+            } else {
+                nodes_excl.push(graph.node_weight(*node_heavy).unwrap().to_string());
+                graph.remove_node(*node_heavy);
+                delta_n_nodes += 1;
+            }
+        }
+        n_iters += 1;
+
         // Report progress
-        if prev_time.elapsed().as_secs() >= 30 && delta_n_nodes != 0 {
+        if n_iters % 50 == 0 {
             let delta_time = prev_time.elapsed();
             info!(
-                "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges.",
+                "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges ({5} components).",
                 delta_n_nodes,
                 delta_time.as_secs(),
                 delta_n_nodes as f32 / delta_time.as_secs_f32(),
                 graph.node_count(),
-                graph.edge_count()
+                graph.edge_count(),
+		nodes_heavy.len(),
             );
             prev_time = Instant::now();
             delta_n_nodes = 0
         }
-
-        // Find heaviest nodes
-        let (node_heavy, _node_heavy_weight) = crate::graph::find_heaviest_node(&graph);
-        trace!("{:?}", node_heavy);
-
-        // Process heaviest node
-        if args.keep_heavy {
-            let mut nodes_del = graph.neighbors_undirected(node_heavy).detach();
-            while let Some(node_neighb) = nodes_del.next_node(&graph) {
-                nodes_excl.push(graph.node_weight(node_neighb).unwrap().to_string());
-                graph.remove_node(node_neighb);
-                delta_n_nodes += 1;
-            }
-        } else {
-            nodes_excl.push(graph.node_weight(node_heavy).unwrap().to_string());
-            graph.remove_node(node_heavy);
-            delta_n_nodes += 1;
-        }
     }
+
     info!(
-        "Pruning complete! Final graph has {0} nodes with {1} edges",
+        "Pruning complete in {0} iterations! Final graph has {1} nodes with {2} edges",
+        n_iters,
         graph.node_count(),
         graph.edge_count()
     );

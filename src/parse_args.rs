@@ -19,23 +19,11 @@ pub struct Args {
     #[clap(long, action)]
     pub header: bool,
 
-    /// Output file.
+    /// Node IDs to exclude.
     ///
-    /// The file to output pruned nodes.
-    #[clap(short, long, value_name = "FILE")]
-    pub out: Option<PathBuf>,
-
-    /// Excluded nodes file.
-    ///
-    /// File to dump excluded nodes.
+    /// File with node IDs to include (one per line).
     #[clap(long, required = false, value_name = "FILE")]
-    pub out_excl: Option<PathBuf>,
-
-    /// Output starting graph.
-    ///
-    /// The file to output starting graph.
-    #[clap(long, required = false, value_name = "FILE")]
-    pub out_graph: Option<PathBuf>,
+    pub subset: Option<PathBuf>,
 
     /// Weight column.
     ///
@@ -65,11 +53,27 @@ pub struct Args {
     #[clap(long, action)]
     pub keep_heavy: bool,
 
-    /// Node IDs to exclude.
+    /// Prunning mode.
+    #[clap(long, default_value_t = 1, value_name = "INT")]
+    pub mode: u8,
+
+    /// Output starting graph.
     ///
-    /// File with node IDs to include (one per line).
+    /// The file to output starting graph.
     #[clap(long, required = false, value_name = "FILE")]
-    pub subset: Option<PathBuf>,
+    pub out_graph: Option<PathBuf>,
+
+    /// Excluded nodes file.
+    ///
+    /// File to dump excluded nodes.
+    #[clap(long, required = false, value_name = "FILE")]
+    pub out_excl: Option<PathBuf>,
+
+    /// Output file.
+    ///
+    /// The file to output pruned nodes.
+    #[clap(short, long, value_name = "FILE")]
+    pub out: Option<PathBuf>,
 
     /// Suppress warnings.
     ///
