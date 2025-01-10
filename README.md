@@ -64,6 +64,8 @@ The output will be a list of the remaining nodes after pruning. Optionally, you 
 
 
 ### Performance
+Due to the way `prune_graph` parallelizes prunning, its performance is strongly dependent on the degree of connectivity of the graph.
+
 ```
 shuf_seed () {
     SEED=$1; shift
@@ -82,29 +84,60 @@ $ seq --equal-width 1 $N_NODES | xargs printf "node_%s\n" > /tmp/nodes.rnd
 $ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 456 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 789 --repeat --input-range 1-250000 --head-count $N_EDGES) | awk '{OFS="\t"; print $0,rand(),rand()}' > example_large.tsv
 
 $ ./target/release/prune_graph -i example_large.tsv --mode 1 --weight-field column_5 -v | wc -l
-[2025-01-10 12:53:12.707320 +01:00] T[main] INFO [src/main.rs:39] prune_graph v0.3.3
-[2025-01-10 12:53:12.707443 +01:00] T[main] INFO [src/main.rs:51] Creating graph...
-[2025-01-10 12:53:12.707449 +01:00] T[main] INFO [src/main.rs:53] Reading from input file...
-[2025-01-10 12:53:21.150591 +01:00] T[main] INFO [src/main.rs:82] Graph has 6321958 nodes with 5000000 edges (1321959 components).
-[2025-01-10 12:53:21.199138 +01:00] T[main] INFO [src/main.rs:110] Pruning heaviest position...
-[2025-01-10 12:58:44.912707 +01:00] T[main] INFO [src/main.rs:151] Pruned 50 nodes in 323s (0.15 nodes/s); 6321908 nodes remaining with 4999633 edges (1 components).
-[2025-01-10 13:04:12.392450 +01:00] T[main] INFO [src/main.rs:151] Pruned 50 nodes in 327s (0.15 nodes/s); 6321858 nodes remaining with 4999288 edges (1 components).
+[2025-01-10 15:40:26.840112 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
+[2025-01-10 15:40:26.840262 +01:00] T[main] INFO [src/main.rs:69] Reading input file "example_large.tsv"
+[2025-01-10 15:40:35.254778 +01:00] T[main] INFO [src/main.rs:98] Graph has 6321958 nodes with 5000000 edges (1321959 components)
+[2025-01-10 15:40:35.295880 +01:00] T[main] INFO [src/main.rs:126] Pruning heaviest position (1 threads)
+[2025-01-10 15:46:09.181833 +01:00] T[main] INFO [src/main.rs:167] Pruned 50 nodes in 333s (0.15 nodes/s); 6321908 nodes remaining with 4999633 edges (1 components)
+[2025-01-10 15:52:00.792564 +01:00] T[main] INFO [src/main.rs:167] Pruned 50 nodes in 351s (0.14 nodes/s); 6321858 nodes remaining with 4999288 edges (1 components)
 [...]
+```
 
+|n_threads | nodes/s |
+| - | - |
+| 1 | 0.15 |
+| 2 |  |
+| 3 |  |
+| 4 |  |
+| 5 |  |
+| 6 |  |
+| 7 |  |
+| 8 |  |
+| 9 |  |
+| 10 |  |
+| 15 |  |
+| 20 |  |
+
+
+```
 $ ./target/release/prune_graph -i example_large.tsv --mode 2 --weight-field column_5 -v | wc -l
-[2025-01-10 11:22:49.190500 +01:00] T[main] INFO [src/main.rs:39] prune_graph v0.3.3
-[2025-01-10 11:22:49.190646 +01:00] T[main] INFO [src/main.rs:51] Creating graph...
-[2025-01-10 11:22:49.190654 +01:00] T[main] INFO [src/main.rs:53] Reading from input file...
-[2025-01-10 11:22:58.359099 +01:00] T[main] INFO [src/main.rs:82] Graph has 6321958 nodes with 5000000 edges (1321959 components).
-[2025-01-10 11:22:58.397518 +01:00] T[main] INFO [src/main.rs:110] Pruning heaviest position...
-[2025-01-10 11:23:21.153921 +01:00] T[main] INFO [src/main.rs:147] Pruned 2755917 nodes in 22s (121105.22 nodes/s); 3566041 nodes remaining with 52827 edges (737 components).
-[2025-01-10 11:23:34.652938 +01:00] T[main] INFO [src/main.rs:147] Pruned 17727 nodes in 13s (1313.21 nodes/s); 3548314 nodes remaining with 13938 edges (206 components).
-[2025-01-10 11:23:46.777152 +01:00] T[main] INFO [src/main.rs:147] Pruned 6446 nodes in 12s (531.66 nodes/s); 3541868 nodes remaining with 2 edges (1 components).
-[2025-01-10 11:23:47.012129 +01:00] T[main] INFO [src/main.rs:161] Pruning complete in 151 iterations! Final graph has 3541867 nodes with 0 edges
-[2025-01-10 11:23:47.012148 +01:00] T[main] INFO [src/main.rs:168] Saving remaining nodes...
-[2025-01-10 11:23:53.000206 +01:00] T[main] INFO [src/main.rs:186] Total runtime: 1.05 mins
+[2025-01-10 15:43:34.998053 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
+[2025-01-10 15:43:34.998253 +01:00] T[main] INFO [src/main.rs:69] Reading input file "example_large.tsv"
+[2025-01-10 15:43:43.749941 +01:00] T[main] INFO [src/main.rs:98] Graph has 6321958 nodes with 5000000 edges (1321959 components)
+[2025-01-10 15:43:43.792413 +01:00] T[main] INFO [src/main.rs:126] Pruning heaviest position (1 threads)
+[2025-01-10 15:44:07.167626 +01:00] T[main] INFO [src/main.rs:167] Pruned 2755917 nodes in 23s (117899.23 nodes/s); 3566041 nodes remaining with 52827 edges (737 components)
+[2025-01-10 15:44:20.872425 +01:00] T[main] INFO [src/main.rs:167] Pruned 17727 nodes in 13s (1293.51 nodes/s); 3548314 nodes remaining with 13938 edges (206 components)
+[2025-01-10 15:44:33.502389 +01:00] T[main] INFO [src/main.rs:167] Pruned 6446 nodes in 12s (510.38 nodes/s); 3541868 nodes remaining with 2 edges (1 components)
+[2025-01-10 15:44:33.764939 +01:00] T[main] INFO [src/main.rs:181] Pruning complete in 151 iterations! Final graph has 3541867 nodes with 0 edges
+[2025-01-10 15:44:33.764963 +01:00] T[main] INFO [src/main.rs:188] Saving remaining nodes
+[2025-01-10 15:44:40.309021 +01:00] T[main] INFO [src/main.rs:206] Total runtime: 1.08 mins
 3541867
 ```
+
+|n_threads | nodes/s |
+| - | - |
+| 1 | 117899.23 |
+| 2 | 138428.42 |
+| 3 | 139283.30 |
+| 4 | 139889.86 |
+| 5 | 142857.89 |
+| 6 | 145813.62 |
+| 7 | 143893.53 |
+| 8 | 146412.25 |
+| 9 | 145626.11 |
+| 10 | 148060.50 |
+| 15 | 144732.75 |
+| 20 | 149349.66 |
 
 
 #### Single component
@@ -118,22 +151,52 @@ $ seq --equal-width 1 $N_NODES | xargs printf "node_%s\n" > /tmp/nodes.rnd
 $ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 456 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 789 --repeat --input-range 1-250000 --head-count $N_EDGES) | awk '{OFS="\t"; print $0,rand(),rand()}' > example_1comp.tsv
 
 $ ./target/release/prune_graph -i example_1comp.tsv --mode 1 --weight-field column_5 -v | wc -l
-[2025-01-10 11:26:32.640207 +01:00] T[main] INFO [src/main.rs:39] prune_graph v0.3.3
-[2025-01-10 11:26:32.640345 +01:00] T[main] INFO [src/main.rs:51] Creating graph...
-[2025-01-10 11:26:32.640354 +01:00] T[main] INFO [src/main.rs:53] Reading from input file...
-[2025-01-10 11:26:40.236347 +01:00] T[main] INFO [src/main.rs:82] Graph has 100000 nodes with 5000000 edges (1 components).
-[2025-01-10 11:26:40.236374 +01:00] T[main] INFO [src/main.rs:110] Pruning heaviest position...
-[2025-01-10 11:28:57.498736 +01:00] T[main] INFO [src/main.rs:147] Pruned 50 nodes in 137s (0.36 nodes/s); 99950 nodes remaining with 4993312 edges (1 components).
-[2025-01-10 11:31:15.431371 +01:00] T[main] INFO [src/main.rs:147] Pruned 50 nodes in 137s (0.36 nodes/s); 99900 nodes remaining with 4986896 edges (1 components).
-[...]
-
-$ ./target/release/prune_graph -i example_1comp.tsv --mode 2 --weight-field column_5 -v | wc -l
-[2025-01-10 13:07:01.057564 +01:00] T[main] INFO [src/main.rs:39] prune_graph v0.3.3
-[2025-01-10 13:07:01.057721 +01:00] T[main] INFO [src/main.rs:51] Creating graph...
-[2025-01-10 13:07:01.057730 +01:00] T[main] INFO [src/main.rs:53] Reading from input file...
-[2025-01-10 13:07:08.832219 +01:00] T[main] INFO [src/main.rs:82] Graph has 100000 nodes with 5000000 edges (1 components).
-[2025-01-10 13:07:08.832252 +01:00] T[main] INFO [src/main.rs:110] Pruning heaviest position...
-[2025-01-10 13:09:28.125425 +01:00] T[main] INFO [src/main.rs:151] Pruned 50 nodes in 139s (0.36 nodes/s); 99950 nodes remaining with 4993312 edges (1 components).
-[2025-01-10 13:11:46.974630 +01:00] T[main] INFO [src/main.rs:151] Pruned 50 nodes in 138s (0.36 nodes/s); 99900 nodes remaining with 4986896 edges (1 components).
+[2025-01-10 15:36:06.894498 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
+[2025-01-10 15:36:06.894672 +01:00] T[main] INFO [src/main.rs:69] Reading input file "example_1comp.tsv"
+[2025-01-10 15:36:13.109857 +01:00] T[main] INFO [src/main.rs:98] Graph has 100000 nodes with 5000000 edges (1 components)
+[2025-01-10 15:36:13.109882 +01:00] T[main] INFO [src/main.rs:126] Pruning heaviest position (1 threads)
+[2025-01-10 15:36:58.235908 +01:00] T[main] INFO [src/main.rs:167] Pruned 50 nodes in 45s (1.11 nodes/s); 99950 nodes remaining with 4993312 edges (1 components)
+[2025-01-10 15:37:43.370222 +01:00] T[main] INFO [src/main.rs:167] Pruned 50 nodes in 45s (1.11 nodes/s); 99900 nodes remaining with 4986896 edges (1 components)
 [...]
 ```
+
+|n_threads | nodes/s |
+| - | - |
+| 1 | 1.11 |
+| 2 | 1.90 |
+| 3 | 2.76 |
+| 4 | 3.62 |
+| 5 | 3.78 |
+| 6 | 4.75 |
+| 7 | 5.61 |
+| 8 | 6.42 |
+| 9 | 7.20 |
+| 10 | 7.02 |
+| 15 | 8.36 |
+| 20 | 8.58 |
+
+```
+$ ./target/release/prune_graph -i example_1comp.tsv --mode 2 --weight-field column_5 -v | wc -l
+[2025-01-10 15:37:59.649537 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
+[2025-01-10 15:37:59.649641 +01:00] T[main] INFO [src/main.rs:69] Reading input file "example_1comp.tsv"
+[2025-01-10 15:38:07.339178 +01:00] T[main] INFO [src/main.rs:98] Graph has 100000 nodes with 5000000 edges (1 components)
+[2025-01-10 15:38:07.339227 +01:00] T[main] INFO [src/main.rs:126] Pruning heaviest position (1 threads)
+[2025-01-10 15:40:26.924916 +01:00] T[main] INFO [src/main.rs:167] Pruned 50 nodes in 139s (0.36 nodes/s); 99950 nodes remaining with 4993312 edges (1 components)
+[2025-01-10 15:42:51.856912 +01:00] T[main] INFO [src/main.rs:167] Pruned 50 nodes in 144s (0.34 nodes/s); 99900 nodes remaining with 4986896 edges (1 components)
+[...]
+```
+
+|n_threads | nodes/s |
+| - | - |
+| 1 | 0.36 |
+| 2 |  |
+| 3 |  |
+| 4 |  |
+| 5 |  |
+| 6 |  |
+| 7 |  |
+| 8 |  |
+| 9 |  |
+| 10 |  |
+| 15 |  |
+| 20 |  |
