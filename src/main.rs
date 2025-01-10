@@ -1,3 +1,7 @@
+use flate2::read;
+use std::ffi::OsStr;
+use std::path::Path;
+
 use clap::Parser;
 use flexi_logger::AdaptiveFormat;
 use itertools::sorted;
@@ -48,21 +52,33 @@ fn main() {
         .expect("cannot create threadpool");
 
     // Read TSV into graph
-    info!("Creating graph...");
     let (mut graph, _graph_idx) = if args.input.is_some() {
-        info!("Reading from input file...");
-        let reader_file =
-            BufReader::new(File::open(args.input.unwrap()).expect("cannot open input file"));
-        crate::graph::graph_read(
-            reader_file,
-            args.header,
-            args.weight_field,
-            args.weight_filter,
-            args.weight_n_edges,
-            args.weight_precision,
-        )
+        let fh = File::open(&args.input.clone().unwrap()).expect("cannot open input file");
+        if Path::new(&args.input.clone().unwrap()).extension() == Some(OsStr::new("gz")) {
+            info!("Reading input Gzip file {0}", &args.input.unwrap().display().to_string());
+            let reader_file_gz = BufReader::with_capacity(128 * 1024, read::GzDecoder::new(fh));
+            crate::graph::graph_read(
+                reader_file_gz,
+                args.header,
+                args.weight_field,
+                args.weight_filter,
+                args.weight_n_edges,
+                args.weight_precision,
+            )
+        } else {
+            info!("Reading input file {0}", &args.input.unwrap().display().to_string());
+            let reader_file = BufReader::new(fh);
+            crate::graph::graph_read(
+                reader_file,
+                args.header,
+                args.weight_field,
+                args.weight_filter,
+                args.weight_n_edges,
+                args.weight_precision,
+            )
+        }
     } else {
-        info!("Reading from STDIN...");
+        info!("Reading from STDIN");
         let reader_stdin = stdin().lock();
         crate::graph::graph_read(
             reader_stdin,
@@ -76,7 +92,7 @@ fn main() {
 
     // Open subset file
     if args.subset.is_some() {
-        info!("Subsetting nodes based on input file...");
+        info!("Subsetting nodes based on input file");
         crate::graph::graph_subset(&mut graph, args.subset.expect("invalid subset option"));
     }
     info!(
@@ -93,7 +109,7 @@ fn main() {
 
     // Print graph
     if args.out_graph.is_some() {
-        info!("Saving graph as dot...");
+        info!("Saving graph as dot");
         if graph.node_count() > 10000 {
             warn!("Plotting graphs with more than 10000 nodes can be slow and not very informative")
         }
@@ -105,9 +121,9 @@ fn main() {
     }
 
     if args.keep_heavy {
-        info!("Pruning neighbors of heaviest position...");
+        info!("Pruning neighbors of heaviest position");
     } else {
-        info!("Pruning heaviest position...");
+        info!("Pruning heaviest position");
     }
 
     let mut n_iters = 0;
@@ -169,7 +185,7 @@ fn main() {
         graph.edge_count()
     );
 
-    info!("Saving remaining nodes...");
+    info!("Saving remaining nodes");
     if args.out.is_some() {
         let mut writer_file = File::create(args.out.unwrap()).expect("cannot open output file");
         write(&mut writer_file, &mut graph.node_weights())
@@ -180,7 +196,7 @@ fn main() {
     }
 
     if args.out_excl.is_some() {
-        info!("Saving excluded nodes to file...");
+        info!("Saving excluded nodes to file");
         let mut writer_file = File::create(args.out_excl.unwrap())
             .expect("cannot open output file for excluded nodes");
         write(&mut writer_file, &mut sorted(nodes_excl))
