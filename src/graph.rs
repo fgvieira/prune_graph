@@ -42,7 +42,7 @@ pub fn graph_read<R: BufRead>(
                 edge.clone()
             } else {
                 (1..edge.len() + 1)
-                    .map(|h| format!("column_{}", h.to_string()))
+                    .map(|h| format!("column_{}", h))
                     .collect()
             };
             debug!("HEADER = {:?}", header);
@@ -82,13 +82,12 @@ pub fn graph_read<R: BufRead>(
                 .map(|x| {
                     round(
                         x.parse::<f32>()
-                            .expect(&format!("cannot convert weight '{x}' to float32")),
+                            .unwrap_or_else(|_| panic!("cannot convert weight '{x}' to float32")),
                         weight_precision.into(),
                     ) as f64
                 })
                 .enumerate()
-                .map(|(i, w)| (header[i + 2].clone(), w))
-                .into_iter(),
+                .map(|(i, w)| (header[i + 2].clone(), w)),
         );
 
         // Debug
@@ -106,7 +105,7 @@ pub fn graph_read<R: BufRead>(
 
         // Add edge to graph
         if weight_filter.is_none()
-            || fasteval::ez_eval(&weight_filter.as_ref().unwrap(), &mut edge_weights)
+            || fasteval::ez_eval(weight_filter.as_ref().unwrap(), &mut edge_weights)
                 .expect("cannot evaluate expression")
                 != 0.0
         {
@@ -117,7 +116,7 @@ pub fn graph_read<R: BufRead>(
                 if weight_n_edges {
                     1.0
                 } else {
-                    edge_weights[&weight_field].clone() as f32
+                    edge_weights[&weight_field] as f32
                 },
             );
         }
@@ -138,7 +137,7 @@ pub fn graph_read<R: BufRead>(
         }
     );
 
-    return (graph, graph_idx);
+    (graph, graph_idx)
 }
 
 pub fn graph_subset(graph: &mut StableGraph<String, f32, Undirected>, subset: PathBuf) -> usize {
@@ -151,19 +150,19 @@ pub fn graph_subset(graph: &mut StableGraph<String, f32, Undirected>, subset: Pa
 
     graph.retain_nodes(|g, ix| nodes_subset.contains(&g[ix]));
 
-    return nodes_subset.len();
+    nodes_subset.len()
 }
 
 fn get_node_weight(
     node_idx: NodeIndex,
     g: &StableGraph<String, f32, Undirected>,
 ) -> (NodeIndex, f32) {
-    return (
+    (
         node_idx,
         g.edges(node_idx)
             .map(|edge| -> &f32 { edge.weight() })
             .sum::<f32>(),
-    );
+    )
 }
 
 fn get_nodes_weight<I>(iter: I, g: &StableGraph<String, f32, Undirected>) -> Vec<(NodeIndex, f32)>
@@ -183,7 +182,7 @@ pub fn find_heaviest_node(
     // Calculate each node's weight
     let mut nodes_weight = nodes_idx.map_or_else(
         || get_nodes_weight(g.node_indices(), g),
-        |vec| get_nodes_weight(vec.into_iter().copied(), g),
+        |vec| get_nodes_weight(vec.iter().copied(), g),
     );
 
     //Sort nodes based on connected edge weight and then alphabetically
@@ -201,7 +200,7 @@ pub fn find_heaviest_node(
         nodes_weight[0].1
     );
 
-    return nodes_weight[0];
+    nodes_weight[0]
 }
 
 fn round(x: f32, decimals: i32) -> f32 {

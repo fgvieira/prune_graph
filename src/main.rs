@@ -54,7 +54,7 @@ fn main() {
 
     // Read TSV into graph
     let (mut graph, _graph_idx) = if args.input.is_some() {
-        let fh = File::open(&args.input.as_ref().unwrap()).expect("cannot open input file");
+        let fh = File::open(args.input.as_ref().unwrap()).expect("cannot open input file");
         if Path::new(&args.input.as_ref().unwrap()).extension() == Some(OsStr::new("gz")) {
             info!("Reading input Gzip file {:?}", &args.input.unwrap());
             let reader_file_gz = BufReader::with_capacity(128 * 1024, read::GzDecoder::new(fh));
@@ -117,7 +117,7 @@ fn main() {
         let mut out_graph = File::create(args.out_graph.unwrap()).expect("cannot open graph file!");
         let output = format!("{}", Dot::new(&graph));
         out_graph
-            .write_all(&output.as_bytes())
+            .write_all(output.as_bytes())
             .expect("cannot write to graph file!");
     }
 
@@ -138,13 +138,13 @@ fn main() {
     while graph.edge_count() > 0 {
         // Find heaviest nodes
         let nodes_heavy: Vec<(petgraph::stable_graph::NodeIndex, f32)> = if args.mode == 1 {
-            vec![crate::graph::find_heaviest_node(&graph, None)]
-        } else {
             kosaraju_scc(&graph)
                 .par_iter()
                 .filter(|x| x.len() > 1)
                 .map(|x| crate::graph::find_heaviest_node(&graph, Some(x)))
                 .collect()
+        } else {
+            vec![crate::graph::find_heaviest_node(&graph, None)]
         };
         trace!("{:?}", nodes_heavy);
 
@@ -166,7 +166,7 @@ fn main() {
         n_iters += 1;
 
         // Report progress
-        if n_iters % 50 == 0 {
+        if n_iters % 100 == 0 {
             let delta_time = prev_time.elapsed();
             info!(
                 "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges ({5} components)",
