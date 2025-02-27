@@ -3,36 +3,36 @@ Fast pruning of weighted graphs with optional filtering.
 
 ## Instalation
 Clone repository:
-```
+```bash
 $ git clone https://github.com/fgvieira/prune_graph.git
 ```
 
 and compile:
-```
+```bash
 $ cargo build --release
 ```
 
 To run the tests:
-```
+```bash
 $ cargo test
 ```
 
 ## Usage
-```
+```bash
 $ ./target/release/prune_graph --in input.tsv --out out.keep
 ```
 or:
-```
+```bash
 $ zcat input.tsv.gz | ./target/release/prune_graph > out.keep
 ```
 
 To plot the graph (optional)
-```
+```bash
 $ cat out.dot | dot -Tsvg > out.svg
 ```
 
 If you want to get a full list of option, just run:
-```
+```bash
 $ ./target/release/prune_graph --help
 ```
 
@@ -41,21 +41,21 @@ As input, you need a `TSV` file (with or without header) with, at least, three c
 
 ## Transform input data
 If you want to transform input data, you can use any CSV manipulation tool (e.g. [Miller](https://miller.readthedocs.io/en/latest/) or [CSVtk](https://bioinf.shenwei.me/csvtk/)). For example, to use absolute values on column `5`:
-```
+```bash
 $ cat test/example.tsv | mlr --tsv --implicit-csv-header put '$5 = abs($5)' | ./target/release/prune_graph --header [...]
 ```
 
 ## Filter edges
 To filter edges, you can use option `--weight-filter` with any expression supported by [fasteval](https://crates.io/crates/fasteval). For example, to use column 7 as weight and only consider edges `> 0.2`:
-```
+```bash
 $ cat test/example.tsv | ./target/release/prune_graph --weight-field "column_7" --weight-filter "column_7 > 0.2" --out out.keep
 ```
 or, if also wanted to filter on `column_3 > 1000`:
-```
+```bash
 $ cat test/example.tsv | ./target/release/prune_graph --weight-field "column_7" --weight-filter "column_3 > 1000 && column_7 > 0.2" --out out.keep
 ```
 or, if you want to only use `0.1 < weight > 0.2`:
-```
+```bash
 $ cat test/example.tsv | ./target/release/prune_graph --weight-field "column_7" --weight-filter "column_3 > 1000 && (column_7 < 0.1 || column_7 > 0.2)" --out out.keep
 ```
 
@@ -67,7 +67,8 @@ The output will be a list of the remaining nodes after pruning. Optionally, you 
 Due to the way `prune_graph` is parallelized, its performance is strongly dependent on the degree of connectivity of the graph (see examples below).
 
 <details><summary>Random function</summary>
-```
+
+```bash
 shuf_seed () {
     SEED=$1; shift
     shuf --random-source <(openssl enc -aes-256-ctr -pass pass:$SEED -nosalt </dev/zero 2>/dev/null) $@
@@ -78,7 +79,8 @@ shuf_seed () {
 ### Example 1 - Large number of components
 
 <details><summary>Random large graph</summary>
-```
+
+```bash
 $ N_NODES=10000000
 $ N_EDGES=5000000
 $ seq --equal-width 1 $N_NODES | xargs printf "node_%s\n" > /tmp/nodes.rnd
@@ -87,7 +89,7 @@ $ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_se
 </details>
 
 ##### Mode 1
-```
+```bash
 $ ./target/release/prune_graph -i example_large.tsv --mode 1 -v | wc -l
 [2025-01-13 10:02:18.548784 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
 [2025-01-13 10:02:18.548891 +01:00] T[main] INFO [src/main.rs:70] Reading input file "example_large.tsv"
@@ -101,7 +103,7 @@ $ ./target/release/prune_graph -i example_large.tsv --mode 1 -v | wc -l
 ```
 
 ##### Mode 2
-```
+```bash
 $ ./target/release/prune_graph -i example_large.tsv --mode 2 -v 2>&1 | head -n 5
 [2025-01-13 10:03:37.628890 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
 [2025-01-13 10:03:37.628990 +01:00] T[main] INFO [src/main.rs:70] Reading input file "example_large.tsv"
@@ -113,7 +115,8 @@ $ ./target/release/prune_graph -i example_large.tsv --mode 2 -v 2>&1 | head -n 5
 ### Example 2 - Single component
 
 <details><summary>Random 1-component graph</summary>
-```
+
+```bash
 $ N_NODES=100000
 $ N_EDGES=5000000
 $ seq --equal-width 1 $N_NODES | xargs printf "node_%s\n" > /tmp/nodes.rnd
@@ -122,7 +125,7 @@ $ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_se
 </details>
 
 ##### Mode 1
-```
+```bash
 $ ./target/release/prune_graph -i example_1comp.tsv --mode 1 -v 2>&1 | head -n 5
 [2025-01-13 10:25:33.833721 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
 [2025-01-13 10:25:33.833907 +01:00] T[main] INFO [src/main.rs:70] Reading input file "example_1comp.tsv"
@@ -132,7 +135,7 @@ $ ./target/release/prune_graph -i example_1comp.tsv --mode 1 -v 2>&1 | head -n 5
 ```
 
 ##### Mode 2
-```
+```bash
 $ ./target/release/prune_graph -i example_1comp.tsv --mode 2 -v 2>&1 | head -n 5
 [2025-01-13 10:35:03.203061 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
 [2025-01-13 10:35:03.203215 +01:00] T[main] INFO [src/main.rs:70] Reading input file "example_1comp.tsv"
