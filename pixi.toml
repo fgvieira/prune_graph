@@ -1,11 +1,11 @@
-[project]
-authors = ["fgvieira <1151762+fgvieira@users.noreply.github.com>"]
+[workspace]
+authors = ["fgvieira"]
 channels = ["conda-forge", "bioconda"]
 name = "prune_graph"
 platforms = ["linux-64"]
-version = "0.1.0"
+version = "0.3.5"
 
 [tasks]
 
 [dependencies]
-rust = ">=1.85.0,<1.86"
+rust = ">=1.85.0,<2"
