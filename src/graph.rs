@@ -1,3 +1,4 @@
+use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, error, trace, warn};
 use petgraph::{
     stable_graph::{NodeIndex, StableGraph},
@@ -27,11 +28,29 @@ pub fn graph_read<R: BufRead>(
     let mut graph = StableGraph::<String, f32, Undirected>::default();
     let mut graph_idx = HashMap::new();
 
+    // Initialize progress bar
+    let show_progress = log::log_enabled!(log::Level::Info);
+    let pb = ProgressBar::new_spinner();
+    if show_progress {
+        pb.set_style(
+            ProgressStyle::with_template(
+                "{spinner}: Read {pos} edges from file in {elapsed} ({per_sec:>0}).",
+            )
+            .unwrap()
+            .tick_chars("||//--\\\\"),
+        );
+    }
+
     // Read the file line by line
     let mut header: Vec<String> = Vec::new();
     let mut n_lines: usize = 0;
     for (index, line) in reader.lines().enumerate() {
         let line = line.expect("cannot read line from input file");
+
+        // Update progress bar
+        if show_progress {
+            pb.inc(1);
+        }
 
         //let edge: Vec<&str> = line.split('\t').collect();
         let edge: Vec<String> = line.split('\t').map(str::to_string).collect();

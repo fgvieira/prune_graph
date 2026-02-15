@@ -14,3 +14,4 @@ itertools = "0.14"
 petgraph = "0.8"
 rayon = "1.11"
 fasteval = "0.2"
+indicatif = {version = "*", features = ["rayon"]}
