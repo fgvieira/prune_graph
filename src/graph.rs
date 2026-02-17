@@ -1,5 +1,4 @@
-use indicatif::{ProgressBar, ProgressStyle};
-use log::{debug, error, trace, warn};
+use indicatif::ProgressStyle;
 use petgraph::{
     stable_graph::{NodeIndex, StableGraph},
     Undirected,
@@ -12,6 +11,8 @@ use std::{
     io::{BufRead, BufReader},
     path::PathBuf,
 };
+use tracing::{debug, error, info_span, trace, warn};
+use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 pub fn graph_read<R: BufRead>(
     reader: R,
@@ -28,29 +29,24 @@ pub fn graph_read<R: BufRead>(
     let mut graph = StableGraph::<String, f32, Undirected>::default();
     let mut graph_idx = HashMap::new();
 
-    // Initialize progress bar
-    let show_progress = log::log_enabled!(log::Level::Info);
-    let pb = ProgressBar::new_spinner();
-    if show_progress {
-        pb.set_style(
-            ProgressStyle::with_template(
-                "{spinner}: Read {pos} edges from file in {elapsed} ({per_sec:>0}).",
-            )
-            .unwrap()
-            .tick_chars("||//--\\\\"),
-        );
-    }
+    // Initialize span and progress bar
+    let graph_span = info_span!("graph");
+    graph_span.pb_set_style(
+        &ProgressStyle::with_template(
+            "{spinner}: Read {pos} edges from file in {elapsed} ({per_sec:>0}).",
+        )
+        .unwrap()
+        .tick_chars("||//--\\\\"),
+    );
+    let graph_span_enter = graph_span.enter();
 
     // Read the file line by line
     let mut header: Vec<String> = Vec::new();
     let mut n_lines: usize = 0;
     for (index, line) in reader.lines().enumerate() {
         let line = line.expect("cannot read line from input file");
-
         // Update progress bar
-        if show_progress {
-            pb.inc(1);
-        }
+        graph_span.pb_inc(1);
 
         //let edge: Vec<&str> = line.split('\t').collect();
         let edge: Vec<String> = line.split('\t').map(str::to_string).collect();
@@ -140,6 +136,8 @@ pub fn graph_read<R: BufRead>(
             );
         }
     }
+    std::mem::drop(graph_span_enter);
+    std::mem::drop(graph_span);
 
     debug!(
         "Input file has {0} nodes with {1} edges{2}",

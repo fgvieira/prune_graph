@@ -8,10 +8,11 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 flate2 = "1.1"
-log = "0.4"
-flexi_logger = "0.31"
 itertools = "0.14"
 petgraph = "0.8"
 rayon = "1.11"
 fasteval = "0.2"
-indicatif = {version = "*", features = ["rayon"]}
+tracing = "0.1"
+tracing-subscriber = {version = "0.3", features = ["chrono"]}
+tracing-indicatif = "0.3"
+indicatif = {version = "0.18", features = ["rayon"]}

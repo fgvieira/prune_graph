@@ -3,9 +3,8 @@ use std::ffi::OsStr;
 use std::path::Path;
 
 use clap::Parser;
-use flexi_logger::AdaptiveFormat;
+use indicatif::ProgressStyle;
 use itertools::sorted;
-use log::{error, info, trace, warn};
 use petgraph::{algo::kosaraju_scc, dot::Dot};
 use rayon::{prelude::*, ThreadPoolBuilder};
 use std::{
@@ -13,8 +12,13 @@ use std::{
     io::{stdin, stdout, BufReader, Write},
     time::Instant,
 };
+use tracing::{debug, error, info, info_span, trace, warn};
 mod graph;
 mod parse_args;
+use tracing_indicatif::span_ext::IndicatifSpanExt;
+use tracing_indicatif::IndicatifLayer;
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::{fmt, prelude::*};
 
 fn main() {
     let start_time = Instant::now();
@@ -23,21 +27,33 @@ fn main() {
 
     // Initialize logger
     let log_level = if args.quiet {
-        log::LevelFilter::Off
+        LevelFilter::OFF
     } else {
         match args.verbose {
-            0 => log::LevelFilter::Warn,
-            1 => log::LevelFilter::Info,
-            2 => log::LevelFilter::Debug,
-            _ => log::LevelFilter::Trace,
+            0 => LevelFilter::WARN,
+            1 => LevelFilter::INFO,
+            2 => LevelFilter::DEBUG,
+            _ => LevelFilter::TRACE,
         }
     };
 
-    flexi_logger::Logger::try_with_str(log_level.as_str().to_lowercase())
-        .expect("cannot initialize logger")
-        .adaptive_format_for_stderr(AdaptiveFormat::WithThread)
-        .start()
-        .expect("cannot start logger");
+    // Define format layer
+    let indicatif_layer = IndicatifLayer::new();
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_timer(fmt::time::ChronoLocal::rfc_3339())
+        .with_thread_ids(true)
+        .with_thread_names(true)
+        .with_target(true)
+        .with_line_number(true)
+        .with_writer(indicatif_layer.get_stderr_writer());
+
+    // Register subscriber
+    tracing_subscriber::registry()
+        .with(log_level)
+        .with(indicatif_layer)
+        .with(fmt_layer)
+        .try_init()
+        .expect("cannot register tracing subscriber");
 
     let version = env!("CARGO_PKG_VERSION");
     info!("prune_graph v{version}");
@@ -97,7 +113,7 @@ fn main() {
         crate::graph::graph_subset(&mut graph, args.subset.expect("invalid subset option"));
     }
     info!(
-        "Graph has {0} nodes with {1} edges ({2} components)",
+        "Graph has {0} nodes with {1} edges [{2} component(s)]",
         graph.node_count(),
         graph.edge_count(),
         kosaraju_scc(&graph).len(),
@@ -133,6 +149,17 @@ fn main() {
     let mut n_iters = 0;
     let mut prev_time = Instant::now();
     let mut delta_n_nodes = 0;
+    let mut delta_n_edges = graph.edge_count() as u64;
+
+    // Initialize progress bar
+    let prune_span = info_span!("prune");
+    prune_span.pb_set_length(delta_n_edges);
+    prune_span.pb_set_style(
+        &ProgressStyle::with_template("{prefix} {bar:50} {pos:>7}/{len:7} edges pruned. {msg}")
+            .unwrap(),
+    );
+    let prune_span_enter = prune_span.enter();
+
     // Store deleted nodes
     let mut nodes_excl = Vec::<String>::new();
     while graph.edge_count() > 0 {
@@ -165,26 +192,25 @@ fn main() {
         }
         n_iters += 1;
 
-        // Report progress
-        if n_iters % 100 == 0 {
-            let delta_time = prev_time.elapsed();
-            info!(
-                "Pruned {0} nodes in {1}s ({2:.2} nodes/s); {3} nodes remaining with {4} edges ({5} components)",
-                delta_n_nodes,
-                delta_time.as_secs(),
-                delta_n_nodes as f32 / delta_time.as_secs_f32(),
-                graph.node_count(),
-                graph.edge_count(),
-		nodes_heavy.len(),
-            );
-            prev_time = Instant::now();
-            delta_n_nodes = 0
-        }
+        // Update progress bar
+        prune_span.pb_inc(delta_n_edges - graph.edge_count() as u64);
+        prune_span.pb_set_message(&*format!(
+            "[Iter {0}: {1} node(s) out of {2} pruned ({3:.0} nodes/s)]",
+            n_iters,
+            delta_n_nodes,
+            graph.node_count(),
+            delta_n_nodes as f32 / prev_time.elapsed().as_secs_f32(),
+        ));
+        delta_n_nodes = 0;
+        delta_n_edges = graph.edge_count() as u64;
+        prev_time = Instant::now();
     }
+    std::mem::drop(prune_span_enter);
+    std::mem::drop(prune_span);
 
-    info!(
-        "Pruning complete in {0} iterations! Final graph has {1} nodes with {2} edges",
-        n_iters,
+    info!("Pruning complete!");
+    debug!(
+        "Final graph has {0} nodes with {1} edges",
         graph.node_count(),
         graph.edge_count()
     );
