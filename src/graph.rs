@@ -11,7 +11,7 @@ use std::{
     io::{BufRead, BufReader},
     path::PathBuf,
 };
-use tracing::{debug, error, info_span, trace, warn};
+use tracing::{debug, enabled, error, info_span, trace, warn, Level};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 pub fn graph_read<R: BufRead>(
@@ -33,7 +33,7 @@ pub fn graph_read<R: BufRead>(
     let graph_span = info_span!("graph");
     graph_span.pb_set_style(
         &ProgressStyle::with_template(
-            "{spinner}: Read {pos} edges from file in {elapsed} ({per_sec:>0}).",
+            "{spinner}: Read {pos} edges in {elapsed} ({per_sec:>0}) {msg}",
         )
         .unwrap()
         .tick_chars("||//--\\\\"),
@@ -47,6 +47,13 @@ pub fn graph_read<R: BufRead>(
         let line = line.expect("cannot read line from input file");
         // Update progress bar
         graph_span.pb_inc(1);
+        if enabled!(Level::DEBUG) {
+            graph_span.pb_set_message(&*format!(
+                "for graph with {0} nodes and {1} edges",
+                graph.node_count(),
+                graph.edge_count()
+            ));
+        }
 
         //let edge: Vec<&str> = line.split('\t').collect();
         let edge: Vec<String> = line.split('\t').map(str::to_string).collect();
@@ -73,9 +80,12 @@ pub fn graph_read<R: BufRead>(
 
         // Check number of fields
         if edge.len() != header.len() {
-            let edge_len = edge.len();
-            let header_len = header.len();
-            error!("edge {n_lines} has {edge_len} fields, while header has {header_len}");
+            error!(
+                "edge {0} has {1} fields, while header has {2}",
+                n_lines,
+                edge.len(),
+                header.len()
+            );
             std::process::exit(-1);
         }
 

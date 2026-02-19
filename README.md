@@ -76,9 +76,38 @@ shuf_seed () {
 ```
 </details>
 
-### Example 1 - Large number of components
+### Example 1 - Single component, highly connected
 
-<details><summary>Random large graph</summary>
+Graph with fewer nodes than edges.
+
+<details><summary>Code</summary>
+
+```bash
+$ N_NODES=100000
+$ N_EDGES=5000000
+$ seq --equal-width 1 $N_NODES | xargs printf "node_%s\n" > /tmp/nodes.rnd
+$ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 456 --repeat --head-count $N_EDGES /tmp/nodes.rnd) | awk '{OFS="\t"; print $0,rand()}' > example_1compH.tsv
+```
+</details>
+
+### Example 2 - Single component, loosely connected
+
+Graph similar to LD in a chromosome, where each node/snp has (on average) `$AVG_N_FWD_EDGES` edges with downstream node/snp(s).
+
+<details><summary>Code</summary>
+
+```bash
+$ N_NODES=1000000
+$ AVG_N_FWD_EDGES=10
+$ seq --equal-width 1 $N_NODES | xargs printf "node_%s\n" | perl -se 'srand(12345); @n = <>; chomp(@n); for ($i=0; $i <= $#n; $i++){ for ($j=$i+1; $j <= $#n; $j++) {print(join("\t", @{[$n[$i], $n[$j], sprintf("%.3f", rand())]})."\n"); last if rand() < 1/$n}}' -- -n=$AVG_N_FWD_EDGES > example_1compL.tsv
+```
+</details>
+
+### Example 3 - Large number of components
+
+Graph with more nodes than edges.
+
+<details><summary>Code</summary>
 
 ```bash
 $ N_NODES=10000000
@@ -88,79 +117,18 @@ $ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_se
 ```
 </details>
 
-##### Mode 1
-```bash
-$ ./target/release/prune_graph -i example_large.tsv --mode 1 -v | wc -l
-[2025-01-13 10:02:18.548784 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
-[2025-01-13 10:02:18.548891 +01:00] T[main] INFO [src/main.rs:70] Reading input file "example_large.tsv"
-[2025-01-13 10:02:24.710818 +01:00] T[main] INFO [src/main.rs:99] Graph has 6321958 nodes with 5000000 edges (1321959 components)
-[2025-01-13 10:02:24.749254 +01:00] T[main] INFO [src/main.rs:130] Pruning heaviest position (1 threads)
-[2025-01-13 10:02:59.512325 +01:00] T[main] INFO [src/main.rs:171] Pruned 2774401 nodes in 34s (79808.90 nodes/s); 3547557 nodes remaining with 12385 edges (351 components)
-[2025-01-13 10:03:12.177538 +01:00] T[main] INFO [src/main.rs:185] Pruning complete in 153 iterations! Final graph has 3541739 nodes with 0 edges
-[2025-01-13 10:03:12.177562 +01:00] T[main] INFO [src/main.rs:192] Saving remaining nodes
-[2025-01-13 10:03:17.491300 +01:00] T[main] INFO [src/main.rs:210] Total runtime: 0.97 mins
-3541739
-```
-
-##### Mode 2
-```bash
-$ ./target/release/prune_graph -i example_large.tsv --mode 2 -v 2>&1 | head -n 5
-[2025-01-13 10:03:37.628890 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
-[2025-01-13 10:03:37.628990 +01:00] T[main] INFO [src/main.rs:70] Reading input file "example_large.tsv"
-[2025-01-13 10:03:44.027462 +01:00] T[main] INFO [src/main.rs:99] Graph has 6321958 nodes with 5000000 edges (1321959 components)
-[2025-01-13 10:03:44.064497 +01:00] T[main] INFO [src/main.rs:130] Pruning heaviest position (1 threads)
-[2025-01-13 10:13:36.945641 +01:00] T[main] INFO [src/main.rs:171] Pruned 100 nodes in 592s (0.17 nodes/s); 6321858 nodes remaining with 4999288 edges (1 components)
-```
-
-### Example 2 - Single component
-
-<details><summary>Random 1-component graph</summary>
-
-```bash
-$ N_NODES=100000
-$ N_EDGES=5000000
-$ seq --equal-width 1 $N_NODES | xargs printf "node_%s\n" > /tmp/nodes.rnd
-$ paste <(shuf_seed 123 --repeat --head-count $N_EDGES /tmp/nodes.rnd) <(shuf_seed 456 --repeat --head-count $N_EDGES /tmp/nodes.rnd) | awk '{OFS="\t"; print $0,rand()}' > example_1comp.tsv
-```
-</details>
-
-##### Mode 1
-```bash
-$ ./target/release/prune_graph -i example_1comp.tsv --mode 1 -v 2>&1 | head -n 5
-[2025-01-13 10:25:33.833721 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
-[2025-01-13 10:25:33.833907 +01:00] T[main] INFO [src/main.rs:70] Reading input file "example_1comp.tsv"
-[2025-01-13 10:25:38.811380 +01:00] T[main] INFO [src/main.rs:99] Graph has 100000 nodes with 5000000 edges (1 components)
-[2025-01-13 10:25:38.811403 +01:00] T[main] INFO [src/main.rs:130] Pruning heaviest position (1 threads)
-[2025-01-13 10:30:03.933081 +01:00] T[main] INFO [src/main.rs:171] Pruned 100 nodes in 265s (0.38 nodes/s); 99900 nodes remaining with 4987002 edges (1 components)
-```
-
-##### Mode 2
-```bash
-$ ./target/release/prune_graph -i example_1comp.tsv --mode 2 -v 2>&1 | head -n 5
-[2025-01-13 10:35:03.203061 +01:00] T[main] INFO [src/main.rs:43] prune_graph v0.3.4
-[2025-01-13 10:35:03.203215 +01:00] T[main] INFO [src/main.rs:70] Reading input file "example_1comp.tsv"
-[2025-01-13 10:35:09.034611 +01:00] T[main] INFO [src/main.rs:99] Graph has 100000 nodes with 5000000 edges (1 components)
-[2025-01-13 10:35:09.034656 +01:00] T[main] INFO [src/main.rs:130] Pruning heaviest position (1 threads)
-[2025-01-13 10:36:43.175727 +01:00] T[main] INFO [src/main.rs:171] Pruned 100 nodes in 94s (1.06 nodes/s); 99900 nodes remaining with 4987002 edges (1 components)
-```
 
 ### Speed-up overview
-The speed-up is measured as the average processing speed (`nodes / s`) over the first 100 iterations.
+The speed-up is measured as the average processing speed (`nodes / s`) over the first 20 iterations, using default settings (unless specified otherwise).
 
-|  | Example 1 | Example 1 | Example 2 | Example 2 |
-| - | - | - | - | - |
-| **n_threads** | **Mode 1** | **Mode 2** | **Mode 1** | **Mode 2** |
-| 1 | 79808.90 | 0.17 | 0.38 | 1.06 |
-| 2 | 85185.79 | 0.20 | 0.44 | 2.11 |
-| 3 | 86654.32 | 0.18 | 0.53 | 3.15 |
-| 4 | 87462.56 | 0.19 | 0.51 | 3.90 |
-| 5 | 89489.18 | 0.19 | 0.52 | 4.46 |
-| 6 | 91585.70 | 0.18 | 0.53 | 5.34 |
-| 7 | 91624.45 | 0.18 | 0.53 | 6.21 |
-| 8 | 91608.91 | 0.19 | 0.55 | 6.37 |
-| 9 | 91013.38 | 0.18 | 0.55 | 7.09 |
-| 10 | 92407.16 | 0.18 | 0.54 | 7.89 |
-| | | | | |
-| 15 | 92844.73 | 0.17 | 0.56 | 9.36 |
-| | | | | |
-| 20 | 92003.05 | 0.18 | 0.56 | 10.52 |
+|  | Example 1 | Example 1 | Example 2 | Example 2 | Example 3 | Example 3 |
+| - | - | - | - | - | - | - |
+| **n_threads** | **Mode 1** | **Mode 2** | **Mode 1** | **Mode 2** | **Mode 1** | **Mode 2** |
+| 1 | 0.45 | 1.37 | 1.20 | 1.79 | 159473.62 | 0.18 |
+| 2 | 0.46 | 2.05 | 1.24 | 1.90 | 167429.55 | 0.18 |
+| 4 | 0.51 | 3.78 | 1.28 | 2.03 | 187083.92 | 0.18 |
+| 6 | 0.54 | 5.48 | 1.28 | 2.02 | 193490.72 | 0.18 |
+| 8 | 0.55 | 6.75 | 1.31 | 2.02 | 195761.61 | 0.18 |
+| 10 | 0.55 | 8.13 | 1.32 | 2.03 | 199361.19 | 0.19 |
+| 15 | 0.56 | 11.03 | 1.30 | 2.05 | 207449.42 | 0.19 |
+| 20 | 0.57 | 12.95 | 1.31 | 2.12 | 204722.47 | 0.18 |

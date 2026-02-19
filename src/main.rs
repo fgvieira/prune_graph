@@ -12,7 +12,7 @@ use std::{
     io::{stdin, stdout, BufReader, Write},
     time::Instant,
 };
-use tracing::{debug, error, info, info_span, trace, warn};
+use tracing::{debug, enabled, error, info, info_span, trace, warn, Level};
 mod graph;
 mod parse_args;
 use tracing_indicatif::span_ext::IndicatifSpanExt;
@@ -147,7 +147,6 @@ fn main() {
     }
 
     let mut n_iters = 0;
-    let mut prev_time = Instant::now();
     let mut delta_n_nodes = 0;
     let mut delta_n_edges = graph.edge_count() as u64;
 
@@ -155,7 +154,7 @@ fn main() {
     let prune_span = info_span!("prune");
     prune_span.pb_set_length(delta_n_edges);
     prune_span.pb_set_style(
-        &ProgressStyle::with_template("{prefix} {bar:50} {pos:>7}/{len:7} edges pruned. {msg}")
+        &ProgressStyle::with_template("{bar:50} {pos:>10}/{len} edges pruned in {elapsed} ({per_sec:>0}) {msg}")
             .unwrap(),
     );
     let prune_span_enter = prune_span.enter();
@@ -194,16 +193,15 @@ fn main() {
 
         // Update progress bar
         prune_span.pb_inc(delta_n_edges - graph.edge_count() as u64);
-        prune_span.pb_set_message(&*format!(
-            "[Iter {0}: {1} node(s) out of {2} pruned ({3:.0} nodes/s)]",
-            n_iters,
-            delta_n_nodes,
-            graph.node_count(),
-            delta_n_nodes as f32 / prev_time.elapsed().as_secs_f32(),
-        ));
-        delta_n_nodes = 0;
         delta_n_edges = graph.edge_count() as u64;
-        prev_time = Instant::now();
+        if enabled!(Level::DEBUG) {
+            prune_span.pb_set_message(&*format!(
+                "from {0} nodes ({1:.2}/s) [{2} iters.]",
+                delta_n_nodes,
+                delta_n_nodes as f32 / prune_span.pb_elapsed().as_secs_f32(),
+                n_iters,
+            ));
+        }
     }
     std::mem::drop(prune_span_enter);
     std::mem::drop(prune_span);
