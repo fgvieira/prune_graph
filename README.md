@@ -12,6 +12,11 @@ and compile:
 $ cargo build --release
 ```
 
+If you are dealing with very large graphs (more than 4 billion nodes/edges), compile with the `large_graph` feature:
+```
+$ cargo build --features large_graph --release
+```
+
 To run the tests:
 ```bash
 $ cargo test

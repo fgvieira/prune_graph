@@ -13,6 +13,10 @@ use std::{
 };
 use tracing::{debug, enabled, error, info_span, trace, warn, Level};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
+#[cfg(not(feature = "large_graph"))]
+type GraphIdx = u32;
+#[cfg(feature = "large_graph")]
+type GraphIdx = usize;
 
 pub fn graph_read<R: BufRead>(
     reader: R,
@@ -22,11 +26,15 @@ pub fn graph_read<R: BufRead>(
     weight_n_edges: bool,
     weight_precision: u8,
 ) -> (
-    StableGraph<String, f32, Undirected>,
-    HashMap<String, NodeIndex>,
+    StableGraph<String, f32, Undirected, GraphIdx>,
+    HashMap<String, NodeIndex<GraphIdx>>,
 ) {
     // Create graph
-    let mut graph = StableGraph::<String, f32, Undirected>::default();
+    let mut graph = StableGraph::<String, f32, Undirected, GraphIdx>::default();
+    debug!(
+        "Creating graph with GraphIdx = {}",
+        std::any::type_name::<GraphIdx>()
+    );
     let mut graph_idx = HashMap::new();
 
     // Initialize span and progress bar
@@ -116,10 +124,11 @@ pub fn graph_read<R: BufRead>(
         );
 
         // Debug
-        if index < 10 {
-            debug!("{:?}", edge);
-            debug!("{:?}", graph.node_weight(graph_idx[&edge[0]]));
-            debug!("{:?}", edge_weights);
+        if index < 20 {
+            debug!("Edge: {:?}", edge);
+            debug!("Node1 weight: {:?}", graph.node_weight(graph_idx[&edge[0]]));
+            debug!("Node2 weight: {:?}", graph.node_weight(graph_idx[&edge[1]]));
+            debug!("Edge weight: {:?}", edge_weights);
         }
 
         // Skip edge if NaN
@@ -135,7 +144,7 @@ pub fn graph_read<R: BufRead>(
                 != 0.0
         {
             // Add edge
-            let _e1 = graph.add_edge(
+            let e1 = graph.add_edge(
                 graph_idx[&edge[0]],
                 graph_idx[&edge[1]],
                 if weight_n_edges {
@@ -144,6 +153,10 @@ pub fn graph_read<R: BufRead>(
                     edge_weights[&weight_field] as f32
                 },
             );
+            // Debug
+            if index < 20 {
+                debug!("Added edge: {:?}", e1);
+            }
         }
     }
     std::mem::drop(graph_span_enter);
@@ -167,7 +180,10 @@ pub fn graph_read<R: BufRead>(
     (graph, graph_idx)
 }
 
-pub fn graph_subset(graph: &mut StableGraph<String, f32, Undirected>, subset: PathBuf) -> usize {
+pub fn graph_subset(
+    graph: &mut StableGraph<String, f32, Undirected, GraphIdx>,
+    subset: PathBuf,
+) -> usize {
     let mut nodes_subset = Vec::<String>::new();
     let reader_file = BufReader::new(File::open(subset).expect("cannot open subset file"));
     for node in reader_file.lines() {
@@ -181,9 +197,9 @@ pub fn graph_subset(graph: &mut StableGraph<String, f32, Undirected>, subset: Pa
 }
 
 fn get_node_weight(
-    node_idx: NodeIndex,
-    g: &StableGraph<String, f32, Undirected>,
-) -> (NodeIndex, f32) {
+    node_idx: NodeIndex<GraphIdx>,
+    g: &StableGraph<String, f32, Undirected, GraphIdx>,
+) -> (NodeIndex<GraphIdx>, f32) {
     (
         node_idx,
         g.edges(node_idx)
@@ -192,20 +208,23 @@ fn get_node_weight(
     )
 }
 
-fn get_nodes_weight<I>(iter: I, g: &StableGraph<String, f32, Undirected>) -> Vec<(NodeIndex, f32)>
+fn get_nodes_weight<I>(
+    iter: I,
+    g: &StableGraph<String, f32, Undirected, GraphIdx>,
+) -> Vec<(NodeIndex<GraphIdx>, f32)>
 where
-    I: Iterator<Item = NodeIndex>,
+    I: Iterator<Item = NodeIndex<GraphIdx>>,
 {
-    iter.collect::<Vec<NodeIndex>>()
+    iter.collect::<Vec<NodeIndex<GraphIdx>>>()
         .par_iter()
         .map(|node_idx| get_node_weight(*node_idx, g))
         .collect()
 }
 
 pub fn find_heaviest_node(
-    g: &StableGraph<String, f32, Undirected>,
-    nodes_idx: Option<&Vec<NodeIndex>>,
-) -> (NodeIndex, f32) {
+    g: &StableGraph<String, f32, Undirected, GraphIdx>,
+    nodes_idx: Option<&Vec<NodeIndex<GraphIdx>>>,
+) -> (NodeIndex<GraphIdx>, f32) {
     // Calculate each node's weight
     let mut nodes_weight = nodes_idx.map_or_else(
         || get_nodes_weight(g.node_indices(), g),

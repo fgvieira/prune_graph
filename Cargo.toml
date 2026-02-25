@@ -16,3 +16,7 @@ tracing = "0.1"
 tracing-subscriber = {version = "0.3", features = ["chrono"]}
 tracing-indicatif = "0.3"
 indicatif = {version = "0.18", features = ["rayon"]}
+
+[features]
+default = []
+large_graph = []

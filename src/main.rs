@@ -154,8 +154,10 @@ fn main() {
     let prune_span = info_span!("prune");
     prune_span.pb_set_length(delta_n_edges);
     prune_span.pb_set_style(
-        &ProgressStyle::with_template("{bar:50} {pos:>10}/{len} edges pruned in {elapsed} ({per_sec:>0}) {msg}")
-            .unwrap(),
+        &ProgressStyle::with_template(
+            "{bar:50} {pos:>10}/{len} edges pruned in {elapsed} ({per_sec:>0}) {msg}",
+        )
+        .unwrap(),
     );
     let prune_span_enter = prune_span.enter();
 
@@ -163,7 +165,7 @@ fn main() {
     let mut nodes_excl = Vec::<String>::new();
     while graph.edge_count() > 0 {
         // Find heaviest nodes
-        let nodes_heavy: Vec<(petgraph::stable_graph::NodeIndex, f32)> = if args.mode == 1 {
+        let nodes_heavy = if args.mode == 1 {
             kosaraju_scc(&graph)
                 .par_iter()
                 .filter(|x| x.len() > 1)
