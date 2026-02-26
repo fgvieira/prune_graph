@@ -63,6 +63,12 @@ pub struct Args {
     #[clap(long, required = false, value_name = "FILE")]
     pub out_graph: Option<PathBuf>,
 
+    /// Output starting components in JSONL format.
+    ///
+    /// The file to output the starting components in JSONL format.
+    #[clap(long, required = false, value_name = "FILE")]
+    pub out_comps: Option<PathBuf>,
+
     /// Excluded nodes file.
     ///
     /// File to dump excluded nodes.

@@ -112,6 +112,12 @@ fn main() {
         info!("Subsetting nodes based on input file");
         crate::graph::graph_subset(&mut graph, args.subset.expect("invalid subset option"));
     }
+
+    if graph.node_count() == 0 {
+        error!("Graph is empty");
+        std::process::exit(1);
+    }
+
     info!(
         "Graph has {0} nodes with {1} edges [{2} component(s)]",
         graph.node_count(),
@@ -119,9 +125,34 @@ fn main() {
         kosaraju_scc(&graph).len(),
     );
 
-    if graph.node_count() == 0 {
-        error!("Graph is empty");
-        std::process::exit(1);
+    // Saving components to file
+    if args.out_comps.is_some() {
+        let init_comps = kosaraju_scc(&graph);
+        info!("Writing {} component(s) to JSONL file", init_comps.len());
+        let mut comps_file =
+            File::create(args.out_comps.unwrap()).expect("Cannot create components file!");
+        for comp in init_comps.iter() {
+            comps_file
+                .write_all(b"[\"")
+                .expect("Cannot write opening bracket to components file.");
+            comps_file
+                .write_all(
+                    comp.iter()
+                        .map(|x| {
+                            graph
+                                .node_weight(*x)
+                                .expect("Cannot find node in graph.")
+                                .to_string()
+                        })
+                        .collect::<Vec<String>>()
+                        .join("\", \"")
+                        .as_bytes(),
+                )
+                .expect("Cannot write component file.");
+            comps_file
+                .write_all(b"\"]\n")
+                .expect("Cannot write closing bracket to components file.");
+        }
     }
 
     // Print graph
