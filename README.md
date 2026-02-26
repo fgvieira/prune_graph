@@ -2,22 +2,17 @@
 Fast pruning of weighted graphs with optional filtering.
 
 ## Instalation
-Clone repository:
+Clone the repository:
 ```bash
 $ git clone https://github.com/fgvieira/prune_graph.git
 ```
 
-and compile:
+Compile:
 ```bash
 $ cargo build --release
 ```
 
-If you are dealing with very large graphs (more than 4 billion nodes/edges), compile with the `large_graph` feature:
-```
-$ cargo build --features large_graph --release
-```
-
-To run the tests:
+And run the tests:
 ```bash
 $ cargo test
 ```
@@ -137,3 +132,34 @@ The speed-up is measured as the average processing speed (`nodes / s`) over the 
 | 10 | 0.55 | 8.13 | 1.32 | 2.03 | 199361.19 | 0.19 |
 | 15 | 0.56 | 11.03 | 1.30 | 2.05 | 207449.42 | 0.19 |
 | 20 | 0.57 | 12.95 | 1.31 | 2.12 | 204722.47 | 0.18 |
+
+
+### Very large graphs
+
+If you are dealing with very large graphs (more than 4 billion nodes/edges), you need to compile with the `large_graph` feature:
+```
+$ cargo build --features large_graph --release
+```
+
+Since it can be quite slow to prune large graphs (specially if they made up of few but highly connected components), you might want to split your original graph into its components and prune wach one separately. First, to get a list of the components, run:
+```
+$ ./target/release/prune_graph --in example_large.tsv --out-comps example_large.comp.jsonl | sort | md5sum
+0ca547c484595d5f80b9fcfd39322fc7  -
+```
+and press Ctrl+C when it starts the prunning. File `example_large.jsonl` will have the nodes of each component as a JSONL file.
+
+Then, split the original file in its components (e.g.):
+```
+# Convert JSONL to TSV
+cat example_large.comp.jsonl | jq -r '.[] | [., input_line_number] | @tsv' |
+  # Add component number (join) to original file
+  mlr --tsv --hi --ho join -f example_large.tsv --ul -j 1 --rp X then sort -f X2 |
+  # Split original file into 1000 files (without splitting components)
+  awk 'BEGIN{OFS="\t"} {of="example_large_comp."($4%1000)".tsv"; print $1,$2,$3 > of}'
+```
+
+and run `prune_graph` on each file separately (`cat`'ing the output).
+```
+$ parallel --jobs 20 ./target/release/prune_graph --in {} ::: example_large_comp.*.tsv | sort | md5sum
+0ca547c484595d5f80b9fcfd39322fc7  -
+```
