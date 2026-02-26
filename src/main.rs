@@ -129,7 +129,8 @@ fn main() {
     if args.out_comps.is_some() {
         let init_comps = kosaraju_scc(&graph);
         info!("Writing {} component(s) to JSONL file", init_comps.len());
-        let mut comps_file = File::create(args.out_comps.unwrap()).expect("Cannot create components file!");
+        let mut comps_file =
+            File::create(args.out_comps.unwrap()).expect("Cannot create components file!");
         for comp in init_comps.iter() {
             comps_file
                 .write_all(b"[\"")
