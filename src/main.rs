@@ -1,19 +1,14 @@
-use flate2::read;
-use std::ffi::OsStr;
-use std::path::Path;
-
 use clap::Parser;
 use indicatif::ProgressStyle;
 use itertools::sorted;
-use petgraph::{algo::kosaraju_scc, dot::Dot};
+use petgraph::algo::kosaraju_scc;
 use rayon::{prelude::*, ThreadPoolBuilder};
-use std::{
-    fs::File,
-    io::{stdin, stdout, BufReader, Write},
-    time::Instant,
-};
+
+use std::{fs::File, io::stdout, time::Instant};
+
 use tracing::{debug, enabled, error, info, info_span, trace, warn, Level};
 mod graph;
+mod io;
 mod parse_args;
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 use tracing_indicatif::IndicatifLayer;
@@ -69,43 +64,14 @@ fn main() {
         .expect("cannot create threadpool");
 
     // Read TSV into graph
-    let (mut graph, _graph_idx) = if let Some(_input) = args.input {
-        let fh = File::open(&_input).expect("cannot open input file");
-        if Path::new(&_input).extension() == Some(OsStr::new("gz")) {
-            info!("Reading input Gzip file {:?}", &_input);
-            let reader_file_gz = BufReader::with_capacity(128 * 1024, read::GzDecoder::new(fh));
-            crate::graph::graph_read(
-                reader_file_gz,
-                args.header,
-                args.weight_field,
-                args.weight_filter,
-                args.weight_n_edges,
-                args.weight_precision,
-            )
-        } else {
-            info!("Reading input file {:?}", &_input);
-            let reader_file = BufReader::new(fh);
-            crate::graph::graph_read(
-                reader_file,
-                args.header,
-                args.weight_field,
-                args.weight_filter,
-                args.weight_n_edges,
-                args.weight_precision,
-            )
-        }
-    } else {
-        info!("Reading from STDIN");
-        let reader_stdin = stdin().lock();
-        crate::graph::graph_read(
-            reader_stdin,
-            args.header,
-            args.weight_field,
-            args.weight_filter,
-            args.weight_n_edges,
-            args.weight_precision,
-        )
-    };
+    let (mut graph, _graph_idx) = io::graph_load(
+        args.input,
+        args.header,
+        args.weight_field,
+        args.weight_filter,
+        args.weight_n_edges,
+        args.weight_precision,
+    );
 
     // Open subset file
     if let Some(_subset) = args.subset {
@@ -127,94 +93,15 @@ fn main() {
 
     // Saving components to file
     if let Some(_out_comps) = args.out_comps {
-        let init_comps = kosaraju_scc(&graph);
-        let mut comps_file = File::create(&_out_comps).expect("Cannot create components file!");
-        if Path::new(&_out_comps).extension() == Some(OsStr::new("jsonl")) {
-            info!("Writing {} component(s) to JSONL file", init_comps.len());
-            for comp in init_comps.iter() {
-                comps_file
-                    .write_all(b"[\"")
-                    .expect("Cannot write opening bracket to components file.");
-                comps_file
-                    .write_all(
-                        comp.iter()
-                            .map(|x| {
-                                graph
-                                    .node_weight(*x)
-                                    .expect("Cannot find node in graph.")
-                                    .to_string()
-                            })
-                            .collect::<Vec<String>>()
-                            .join("\", \"")
-                            .as_bytes(),
-                    )
-                    .expect("Cannot write component file.");
-                comps_file
-                    .write_all(b"\"]\n")
-                    .expect("Cannot write closing bracket to components file.");
-            }
-        } else {
-            info!("Writing {} component(s) to TSV file", init_comps.len());
-            // Print header
-            if args.header {
-                comps_file
-                    .write_all(b"node1\tnode2\tweight\tcomponent\n")
-                    .expect("Cannot write header to components file.");
-            }
-            // Print components
-            for (idx, comp) in init_comps.iter().enumerate() {
-                let mut node_list = Vec::new();
-                for source in comp.iter() {
-                    for target in graph.neighbors(*source) {
-                        if node_list.contains(&target) {
-                            continue;
-                        }
-                        let edge = graph.find_edge(*source, target).unwrap();
-                        comps_file
-                            .write_all(
-                                format!(
-                                    "{}\t{}\t{}\t{}\n",
-                                    graph.node_weight(*source).unwrap(),
-                                    graph.node_weight(target).unwrap(),
-                                    graph.edge_weight(edge).unwrap(),
-                                    idx + 1,
-                                )
-                                .as_bytes(),
-                            )
-                            .expect("Cannot write to components output file.");
-                    }
-                    node_list.push(*source);
-                }
-            }
-        }
+        io::graph_save_components(&graph, _out_comps, args.header);
     }
 
-    // Print graph
-    if let Some(_out_graph) = args.out_graph {
-        info!("Saving graph as dot");
-        if graph.node_count() > 10000 {
-            warn!("Plotting graphs with more than 10000 nodes can be slow and not very informative")
-        }
-        let mut out_graph = File::create(_out_graph).expect("cannot open graph file!");
-        let output = format!("{}", Dot::new(&graph));
-        out_graph
-            .write_all(output.as_bytes())
-            .expect("cannot write to graph file!");
-    }
-
-    if args.keep_heavy {
-        info!(
-            "Pruning neighbors of heaviest position ({} threads)",
-            args.n_threads
-        );
-    } else {
-        info!("Pruning heaviest position ({} threads)", args.n_threads);
-    }
+    // Save graph to file
+    io::graph_save_dot(&graph, args.out_graph);
 
     let mut n_iters = 0;
     let mut delta_n_nodes = 0;
     let mut delta_n_edges = graph.edge_count() as u64;
-
     // Initialize progress bar
     let prune_span = info_span!("prune");
     prune_span.pb_set_length(delta_n_edges);
@@ -225,6 +112,16 @@ fn main() {
         .unwrap(),
     );
     let prune_span_enter = prune_span.enter();
+
+    // Start graph pruning
+    if args.keep_heavy {
+        info!(
+            "Pruning neighbors of heaviest position ({} threads)",
+            args.n_threads
+        );
+    } else {
+        info!("Pruning heaviest position ({} threads)", args.n_threads);
+    }
 
     // Store deleted nodes
     let mut nodes_excl = Vec::<String>::new();

@@ -15,11 +15,11 @@ use tracing::{debug, enabled, error, info_span, trace, warn, Level};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 #[cfg(not(feature = "large_graph"))]
-type GraphIdx = u32;
+pub type GraphIdx = u32;
 #[cfg(feature = "large_graph")]
-type GraphIdx = usize;
+pub type GraphIdx = usize;
 
-type GraphX = (
+pub type GraphX = (
     StableGraph<String, f32, Undirected, GraphIdx>,
     HashMap<String, NodeIndex<GraphIdx>>,
 );
