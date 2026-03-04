@@ -69,10 +69,10 @@ fn main() {
         .expect("cannot create threadpool");
 
     // Read TSV into graph
-    let (mut graph, _graph_idx) = if args.input.is_some() {
-        let fh = File::open(args.input.as_ref().unwrap()).expect("cannot open input file");
-        if Path::new(&args.input.as_ref().unwrap()).extension() == Some(OsStr::new("gz")) {
-            info!("Reading input Gzip file {:?}", &args.input.unwrap());
+    let (mut graph, _graph_idx) = if let Some(_input) = args.input {
+        let fh = File::open(&_input).expect("cannot open input file");
+        if Path::new(&_input).extension() == Some(OsStr::new("gz")) {
+            info!("Reading input Gzip file {:?}", &_input);
             let reader_file_gz = BufReader::with_capacity(128 * 1024, read::GzDecoder::new(fh));
             crate::graph::graph_read(
                 reader_file_gz,
@@ -83,7 +83,7 @@ fn main() {
                 args.weight_precision,
             )
         } else {
-            info!("Reading input file {:?}", &args.input.unwrap());
+            info!("Reading input file {:?}", &_input);
             let reader_file = BufReader::new(fh);
             crate::graph::graph_read(
                 reader_file,
@@ -108,9 +108,9 @@ fn main() {
     };
 
     // Open subset file
-    if args.subset.is_some() {
+    if let Some(_subset) = args.subset {
         info!("Subsetting nodes based on input file");
-        crate::graph::graph_subset(&mut graph, args.subset.expect("invalid subset option"));
+        crate::graph::graph_subset(&mut graph, _subset);
     }
 
     if graph.node_count() == 0 {
@@ -126,42 +126,76 @@ fn main() {
     );
 
     // Saving components to file
-    if args.out_comps.is_some() {
+    if let Some(_out_comps) = args.out_comps {
         let init_comps = kosaraju_scc(&graph);
-        info!("Writing {} component(s) to JSONL file", init_comps.len());
-        let mut comps_file =
-            File::create(args.out_comps.unwrap()).expect("Cannot create components file!");
-        for comp in init_comps.iter() {
-            comps_file
-                .write_all(b"[\"")
-                .expect("Cannot write opening bracket to components file.");
-            comps_file
-                .write_all(
-                    comp.iter()
-                        .map(|x| {
-                            graph
-                                .node_weight(*x)
-                                .expect("Cannot find node in graph.")
-                                .to_string()
-                        })
-                        .collect::<Vec<String>>()
-                        .join("\", \"")
-                        .as_bytes(),
-                )
-                .expect("Cannot write component file.");
-            comps_file
-                .write_all(b"\"]\n")
-                .expect("Cannot write closing bracket to components file.");
+        let mut comps_file = File::create(&_out_comps).expect("Cannot create components file!");
+        if Path::new(&_out_comps).extension() == Some(OsStr::new("jsonl")) {
+            info!("Writing {} component(s) to JSONL file", init_comps.len());
+            for comp in init_comps.iter() {
+                comps_file
+                    .write_all(b"[\"")
+                    .expect("Cannot write opening bracket to components file.");
+                comps_file
+                    .write_all(
+                        comp.iter()
+                            .map(|x| {
+                                graph
+                                    .node_weight(*x)
+                                    .expect("Cannot find node in graph.")
+                                    .to_string()
+                            })
+                            .collect::<Vec<String>>()
+                            .join("\", \"")
+                            .as_bytes(),
+                    )
+                    .expect("Cannot write component file.");
+                comps_file
+                    .write_all(b"\"]\n")
+                    .expect("Cannot write closing bracket to components file.");
+            }
+        } else {
+            info!("Writing {} component(s) to TSV file", init_comps.len());
+            // Print header
+            if args.header {
+                comps_file
+                    .write_all(b"node1\tnode2\tweight\tcomponent\n")
+                    .expect("Cannot write header to components file.");
+            }
+            // Print components
+            for (idx, comp) in init_comps.iter().enumerate() {
+                let mut node_list = Vec::new();
+                for source in comp.iter() {
+                    for target in graph.neighbors(*source) {
+                        if node_list.contains(&target) {
+                            continue;
+                        }
+                        let edge = graph.find_edge(*source, target).unwrap();
+                        comps_file
+                            .write_all(
+                                format!(
+                                    "{}\t{}\t{}\t{}\n",
+                                    graph.node_weight(*source).unwrap(),
+                                    graph.node_weight(target).unwrap(),
+                                    graph.edge_weight(edge).unwrap(),
+                                    idx + 1,
+                                )
+                                .as_bytes(),
+                            )
+                            .expect("Cannot write to components output file.");
+                    }
+                    node_list.push(*source);
+                }
+            }
         }
     }
 
     // Print graph
-    if args.out_graph.is_some() {
+    if let Some(_out_graph) = args.out_graph {
         info!("Saving graph as dot");
         if graph.node_count() > 10000 {
             warn!("Plotting graphs with more than 10000 nodes can be slow and not very informative")
         }
-        let mut out_graph = File::create(args.out_graph.unwrap()).expect("cannot open graph file!");
+        let mut out_graph = File::create(_out_graph).expect("cannot open graph file!");
         let output = format!("{}", Dot::new(&graph));
         out_graph
             .write_all(output.as_bytes())
@@ -228,7 +262,7 @@ fn main() {
         prune_span.pb_inc(delta_n_edges - graph.edge_count() as u64);
         delta_n_edges = graph.edge_count() as u64;
         if enabled!(Level::DEBUG) {
-            prune_span.pb_set_message(&*format!(
+            prune_span.pb_set_message(&format!(
                 "from {0} nodes ({1:.2}/s) [{2} iters.]",
                 delta_n_nodes,
                 delta_n_nodes as f32 / prune_span.pb_elapsed().as_secs_f32(),
@@ -247,8 +281,8 @@ fn main() {
     );
 
     info!("Saving remaining nodes");
-    if args.out.is_some() {
-        let mut writer_file = File::create(args.out.unwrap()).expect("cannot open output file");
+    if let Some(_out) = args.out {
+        let mut writer_file = File::create(_out).expect("cannot open output file");
         write(&mut writer_file, &mut graph.node_weights())
             .expect("cannot write results to output file");
     } else {
@@ -256,10 +290,10 @@ fn main() {
             .expect("cannot write results to stdout");
     }
 
-    if args.out_excl.is_some() {
+    if let Some(_out_excl) = args.out_excl {
         info!("Saving excluded nodes to file");
-        let mut writer_file = File::create(args.out_excl.unwrap())
-            .expect("cannot open output file for excluded nodes");
+        let mut writer_file =
+            File::create(_out_excl).expect("cannot open output file for excluded nodes");
         write(&mut writer_file, &mut sorted(nodes_excl))
             .expect("cannot write excluded nodes to file");
     }
