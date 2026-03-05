@@ -1,19 +1,14 @@
-use flate2::read;
-use std::ffi::OsStr;
-use std::path::Path;
-
 use clap::Parser;
 use indicatif::ProgressStyle;
 use itertools::sorted;
-use petgraph::{algo::kosaraju_scc, dot::Dot};
+use petgraph::algo::kosaraju_scc;
 use rayon::{prelude::*, ThreadPoolBuilder};
-use std::{
-    fs::File,
-    io::{stdin, stdout, BufReader, Write},
-    time::Instant,
-};
+
+use std::{fs::File, io::stdout, time::Instant};
+
 use tracing::{debug, enabled, error, info, info_span, trace, warn, Level};
 mod graph;
+mod io;
 mod parse_args;
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 use tracing_indicatif::IndicatifLayer;
@@ -69,48 +64,19 @@ fn main() {
         .expect("cannot create threadpool");
 
     // Read TSV into graph
-    let (mut graph, _graph_idx) = if args.input.is_some() {
-        let fh = File::open(args.input.as_ref().unwrap()).expect("cannot open input file");
-        if Path::new(&args.input.as_ref().unwrap()).extension() == Some(OsStr::new("gz")) {
-            info!("Reading input Gzip file {:?}", &args.input.unwrap());
-            let reader_file_gz = BufReader::with_capacity(128 * 1024, read::GzDecoder::new(fh));
-            crate::graph::graph_read(
-                reader_file_gz,
-                args.header,
-                args.weight_field,
-                args.weight_filter,
-                args.weight_n_edges,
-                args.weight_precision,
-            )
-        } else {
-            info!("Reading input file {:?}", &args.input.unwrap());
-            let reader_file = BufReader::new(fh);
-            crate::graph::graph_read(
-                reader_file,
-                args.header,
-                args.weight_field,
-                args.weight_filter,
-                args.weight_n_edges,
-                args.weight_precision,
-            )
-        }
-    } else {
-        info!("Reading from STDIN");
-        let reader_stdin = stdin().lock();
-        crate::graph::graph_read(
-            reader_stdin,
-            args.header,
-            args.weight_field,
-            args.weight_filter,
-            args.weight_n_edges,
-            args.weight_precision,
-        )
-    };
+    let (mut graph, _graph_idx) = io::graph_load(
+        args.input,
+        args.header,
+        args.weight_field,
+        args.weight_filter,
+        args.weight_n_edges,
+        args.weight_precision,
+    );
 
     // Open subset file
-    if args.subset.is_some() {
+    if let Some(_subset) = args.subset {
         info!("Subsetting nodes based on input file");
-        crate::graph::graph_subset(&mut graph, args.subset.expect("invalid subset option"));
+        crate::graph::graph_subset(&mut graph, _subset);
     }
 
     if graph.node_count() == 0 {
@@ -126,61 +92,16 @@ fn main() {
     );
 
     // Saving components to file
-    if args.out_comps.is_some() {
-        let init_comps = kosaraju_scc(&graph);
-        info!("Writing {} component(s) to JSONL file", init_comps.len());
-        let mut comps_file =
-            File::create(args.out_comps.unwrap()).expect("Cannot create components file!");
-        for comp in init_comps.iter() {
-            comps_file
-                .write_all(b"[\"")
-                .expect("Cannot write opening bracket to components file.");
-            comps_file
-                .write_all(
-                    comp.iter()
-                        .map(|x| {
-                            graph
-                                .node_weight(*x)
-                                .expect("Cannot find node in graph.")
-                                .to_string()
-                        })
-                        .collect::<Vec<String>>()
-                        .join("\", \"")
-                        .as_bytes(),
-                )
-                .expect("Cannot write component file.");
-            comps_file
-                .write_all(b"\"]\n")
-                .expect("Cannot write closing bracket to components file.");
-        }
+    if let Some(_out_comps) = args.out_comps {
+        io::graph_save_components(&graph, _out_comps, args.header);
     }
 
-    // Print graph
-    if args.out_graph.is_some() {
-        info!("Saving graph as dot");
-        if graph.node_count() > 10000 {
-            warn!("Plotting graphs with more than 10000 nodes can be slow and not very informative")
-        }
-        let mut out_graph = File::create(args.out_graph.unwrap()).expect("cannot open graph file!");
-        let output = format!("{}", Dot::new(&graph));
-        out_graph
-            .write_all(output.as_bytes())
-            .expect("cannot write to graph file!");
-    }
-
-    if args.keep_heavy {
-        info!(
-            "Pruning neighbors of heaviest position ({} threads)",
-            args.n_threads
-        );
-    } else {
-        info!("Pruning heaviest position ({} threads)", args.n_threads);
-    }
+    // Save graph to file
+    io::graph_save_dot(&graph, args.out_graph);
 
     let mut n_iters = 0;
     let mut delta_n_nodes = 0;
     let mut delta_n_edges = graph.edge_count() as u64;
-
     // Initialize progress bar
     let prune_span = info_span!("prune");
     prune_span.pb_set_length(delta_n_edges);
@@ -191,6 +112,16 @@ fn main() {
         .unwrap(),
     );
     let prune_span_enter = prune_span.enter();
+
+    // Start graph pruning
+    if args.keep_heavy {
+        info!(
+            "Pruning neighbors of heaviest position ({} threads)",
+            args.n_threads
+        );
+    } else {
+        info!("Pruning heaviest position ({} threads)", args.n_threads);
+    }
 
     // Store deleted nodes
     let mut nodes_excl = Vec::<String>::new();
@@ -228,7 +159,7 @@ fn main() {
         prune_span.pb_inc(delta_n_edges - graph.edge_count() as u64);
         delta_n_edges = graph.edge_count() as u64;
         if enabled!(Level::DEBUG) {
-            prune_span.pb_set_message(&*format!(
+            prune_span.pb_set_message(&format!(
                 "from {0} nodes ({1:.2}/s) [{2} iters.]",
                 delta_n_nodes,
                 delta_n_nodes as f32 / prune_span.pb_elapsed().as_secs_f32(),
@@ -247,8 +178,8 @@ fn main() {
     );
 
     info!("Saving remaining nodes");
-    if args.out.is_some() {
-        let mut writer_file = File::create(args.out.unwrap()).expect("cannot open output file");
+    if let Some(_out) = args.out {
+        let mut writer_file = File::create(_out).expect("cannot open output file");
         write(&mut writer_file, &mut graph.node_weights())
             .expect("cannot write results to output file");
     } else {
@@ -256,10 +187,10 @@ fn main() {
             .expect("cannot write results to stdout");
     }
 
-    if args.out_excl.is_some() {
+    if let Some(_out_excl) = args.out_excl {
         info!("Saving excluded nodes to file");
-        let mut writer_file = File::create(args.out_excl.unwrap())
-            .expect("cannot open output file for excluded nodes");
+        let mut writer_file =
+            File::create(_out_excl).expect("cannot open output file for excluded nodes");
         write(&mut writer_file, &mut sorted(nodes_excl))
             .expect("cannot write excluded nodes to file");
     }

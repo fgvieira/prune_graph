@@ -13,10 +13,16 @@ use std::{
 };
 use tracing::{debug, enabled, error, info_span, trace, warn, Level};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
+
 #[cfg(not(feature = "large_graph"))]
-type GraphIdx = u32;
+pub type GraphIdx = u32;
 #[cfg(feature = "large_graph")]
-type GraphIdx = usize;
+pub type GraphIdx = usize;
+
+pub type GraphX = (
+    StableGraph<String, f32, Undirected, GraphIdx>,
+    HashMap<String, NodeIndex<GraphIdx>>,
+);
 
 pub fn graph_read<R: BufRead>(
     reader: R,
@@ -25,10 +31,7 @@ pub fn graph_read<R: BufRead>(
     weight_filter: Option<String>,
     weight_n_edges: bool,
     weight_precision: u8,
-) -> (
-    StableGraph<String, f32, Undirected, GraphIdx>,
-    HashMap<String, NodeIndex<GraphIdx>>,
-) {
+) -> GraphX {
     // Create graph
     let mut graph = StableGraph::<String, f32, Undirected, GraphIdx>::default();
     debug!(
@@ -56,7 +59,7 @@ pub fn graph_read<R: BufRead>(
         // Update progress bar
         graph_span.pb_inc(1);
         if enabled!(Level::DEBUG) {
-            graph_span.pb_set_message(&*format!(
+            graph_span.pb_set_message(&format!(
                 "for graph with {0} nodes and {1} edges",
                 graph.node_count(),
                 graph.edge_count()
@@ -166,12 +169,8 @@ pub fn graph_read<R: BufRead>(
         "Input file has {0} nodes with {1} edges{2}",
         graph.node_count(),
         n_lines,
-        if weight_filter.is_some() {
-            format!(
-                " ({0} edges with {1})",
-                graph.edge_count(),
-                weight_filter.unwrap()
-            )
+        if let Some(_weight_filter) = weight_filter {
+            format!(" ({0} edges with {1})", graph.edge_count(), _weight_filter)
         } else {
             "".to_string()
         }

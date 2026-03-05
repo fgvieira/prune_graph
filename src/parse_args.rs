@@ -44,7 +44,7 @@ pub struct Args {
     pub weight_n_edges: bool,
 
     /// Weight precision.
-    #[clap(long, default_value_t = 4, value_name = "INT")]
+    #[clap(long, default_value_t = 6, value_name = "INT")]
     pub weight_precision: u8,
 
     /// Keep 'heavy' nodes
@@ -63,7 +63,7 @@ pub struct Args {
     #[clap(long, required = false, value_name = "FILE")]
     pub out_graph: Option<PathBuf>,
 
-    /// Output starting components in JSONL format.
+    /// Output starting components in JSONL/TSV format (depending on extension).
     ///
     /// The file to output the starting components in JSONL format.
     #[clap(long, required = false, value_name = "FILE")]

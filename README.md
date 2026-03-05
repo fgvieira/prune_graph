@@ -143,23 +143,13 @@ $ cargo build --features large_graph --release
 
 Since it can be quite slow to prune large graphs (specially if they made up of few but highly connected components), you might want to split your original graph into its components and prune wach one separately. First, to get a list of the components, run:
 ```
-$ ./target/release/prune_graph --in example_large.tsv --out-comps example_large.comp.jsonl | sort | md5sum
-0ca547c484595d5f80b9fcfd39322fc7  -
+$ ./target/release/prune_graph --in example_large.tsv --out-comps example_large.comps.tsv | sort | md5sum
+49ae0b526d610b8796ea18c2fc2ec0bf  -
 ```
-and press Ctrl+C when it starts the prunning. File `example_large.jsonl` will have the nodes of each component as a JSONL file.
+and press Ctrl+C when it starts the prunning. File `example_large.comps.tsv` will have the graph edges as a TSV file.
 
-Then, split the original file in its components (e.g.):
+Then run `prune_graph` on groups of (e.g.) 10 components (without splitting components):
 ```
-# Convert JSONL to TSV
-cat example_large.comp.jsonl | jq -r '.[] | [., input_line_number] | @tsv' |
-  # Add component number (join) to original file
-  mlr --tsv --hi --ho join -f example_large.tsv --ul -j 1 --rp X then sort -f X2 |
-  # Split original file into 1000 files (without splitting components)
-  awk 'BEGIN{OFS="\t"} {of="example_large_comp."($4%1000)".tsv"; print $1,$2,$3 > of}'
-```
-
-and run `prune_graph` on each file separately (`cat`'ing the output).
-```
-$ parallel --jobs 20 ./target/release/prune_graph --in {} ::: example_large_comp.*.tsv | sort | md5sum
-0ca547c484595d5f80b9fcfd39322fc7  -
+$ cat example_large.comps.tsv | awk '$4 != prev_comp {printf "==="} {prev_comp=$4; print}' | parallel --pipe --recend "===" --rrs -N 10 ./target/release/prune_graph | sort | md5sum
+49ae0b526d610b8796ea18c2fc2ec0bf  -
 ```
