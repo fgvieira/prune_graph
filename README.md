@@ -148,13 +148,8 @@ $ ./target/release/prune_graph --in example_large.tsv --out-comps example_large.
 ```
 and press Ctrl+C when it starts the prunning. File `example_large.comps.tsv` will have the graph edges as a TSV file.
 
-Split components in (e.g.) 1000 files (without splitting components):
+Then run `prune_graph` on groups of (e.g.) 10 components (without splitting components):
 ```
-cat example_large.comps.tsv | awk 'BEGIN{OFS="\t"} {of="example_large_comp."($4%1000)".tsv"; print $1,$2,$3 > of}'
-```
-
-and run `prune_graph` on each file separately (`cat`'ing the output).
-```
-$ parallel --jobs 20 ./target/release/prune_graph --in {} ::: example_large_comp.*.tsv | sort | md5sum
+$ cat example_large.comps.tsv | awk '$4 != prev_comp {printf "==="} {prev_comp=$4; print}' | parallel --pipe --recend "===" --rrs -N 10 ./target/release/prune_graph | sort | md5sum
 49ae0b526d610b8796ea18c2fc2ec0bf  -
 ```
