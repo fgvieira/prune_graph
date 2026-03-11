@@ -1,4 +1,5 @@
 use flate2::read;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::{
     fs::File,
@@ -7,8 +8,7 @@ use std::{
 };
 
 use petgraph::algo::kosaraju_scc;
-use petgraph::stable_graph::{NodeIndex, StableGraph};
-use petgraph::{dot::Dot, Undirected};
+use petgraph::dot::Dot;
 
 use tracing::{info, warn};
 
@@ -21,7 +21,7 @@ pub fn graph_load(
     weight_filter: Option<String>,
     weight_n_edges: bool,
     weight_precision: u8,
-) -> graph::GraphX {
+) -> (graph::_Graph, HashMap<String, graph::_NodeIdx>) {
     if let Some(_input) = input {
         let fh = File::open(&_input).expect("cannot open input file");
         if Path::new(&_input).extension() == Some(OsStr::new("gz")) {
@@ -61,10 +61,7 @@ pub fn graph_load(
     }
 }
 
-pub fn graph_save_dot(
-    graph: &StableGraph<String, f32, Undirected, graph::GraphIdx>,
-    out_graph: Option<PathBuf>,
-) {
+pub fn graph_save_dot(graph: &graph::_Graph, out_graph: Option<PathBuf>) {
     if let Some(_out_graph) = out_graph {
         info!("Saving graph as dot");
         if graph.node_count() > 10000 {
@@ -78,11 +75,7 @@ pub fn graph_save_dot(
     }
 }
 
-pub fn graph_save_components(
-    graph: &StableGraph<String, f32, Undirected>,
-    out_comps: PathBuf,
-    has_header: bool,
-) {
+pub fn graph_save_components(graph: &graph::_Graph, out_comps: PathBuf, has_header: bool) {
     let init_comps = kosaraju_scc(graph);
     let comps_file = File::create(&out_comps).expect("Cannot create components file!");
     if Path::new(&out_comps).extension() == Some(OsStr::new("jsonl")) {
@@ -93,8 +86,8 @@ pub fn graph_save_components(
 }
 
 pub fn graph_save_components_jsonl(
-    graph: &StableGraph<String, f32, Undirected>,
-    init_comps: Vec<Vec<NodeIndex>>,
+    graph: &graph::_Graph,
+    init_comps: Vec<Vec<graph::_NodeIdx>>,
     mut comps_file: File,
 ) {
     info!("Writing {} component(s) to JSONL file", init_comps.len());
@@ -123,8 +116,8 @@ pub fn graph_save_components_jsonl(
 }
 
 pub fn graph_save_components_tsv(
-    graph: &StableGraph<String, f32, Undirected>,
-    init_comps: Vec<Vec<NodeIndex>>,
+    graph: &graph::_Graph,
+    init_comps: Vec<Vec<graph::_NodeIdx>>,
     mut comps_file: File,
     has_header: bool,
 ) {

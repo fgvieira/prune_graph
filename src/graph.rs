@@ -15,14 +15,12 @@ use tracing::{debug, enabled, error, info_span, trace, warn, Level};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 #[cfg(not(feature = "large_graph"))]
-pub type GraphIdx = u32;
+pub type _GraphIdx = u32;
 #[cfg(feature = "large_graph")]
-pub type GraphIdx = usize;
+pub type _GraphIdx = usize;
 
-pub type GraphX = (
-    StableGraph<String, f32, Undirected, GraphIdx>,
-    HashMap<String, NodeIndex<GraphIdx>>,
-);
+pub type _Graph = StableGraph<String, f32, Undirected, _GraphIdx>;
+pub type _NodeIdx = NodeIndex<_GraphIdx>;
 
 pub fn graph_read<R: BufRead>(
     reader: R,
@@ -31,12 +29,12 @@ pub fn graph_read<R: BufRead>(
     weight_filter: Option<String>,
     weight_n_edges: bool,
     weight_precision: u8,
-) -> GraphX {
+) -> (_Graph, HashMap<String, _NodeIdx>) {
     // Create graph
-    let mut graph = StableGraph::<String, f32, Undirected, GraphIdx>::default();
+    let mut graph = _Graph::default();
     debug!(
         "Creating graph with GraphIdx = {}",
-        std::any::type_name::<GraphIdx>()
+        std::any::type_name::<_GraphIdx>()
     );
     let mut graph_idx = HashMap::new();
 
@@ -179,10 +177,7 @@ pub fn graph_read<R: BufRead>(
     (graph, graph_idx)
 }
 
-pub fn graph_subset(
-    graph: &mut StableGraph<String, f32, Undirected, GraphIdx>,
-    subset: PathBuf,
-) -> usize {
+pub fn graph_subset(graph: &mut _Graph, subset: PathBuf) -> usize {
     let mut nodes_subset = Vec::<String>::new();
     let reader_file = BufReader::new(File::open(subset).expect("cannot open subset file"));
     for node in reader_file.lines() {
@@ -195,10 +190,7 @@ pub fn graph_subset(
     nodes_subset.len()
 }
 
-fn get_node_weight(
-    node_idx: NodeIndex<GraphIdx>,
-    g: &StableGraph<String, f32, Undirected, GraphIdx>,
-) -> (NodeIndex<GraphIdx>, f32) {
+fn get_node_weight(node_idx: _NodeIdx, g: &_Graph) -> (_NodeIdx, f32) {
     (
         node_idx,
         g.edges(node_idx)
@@ -207,23 +199,17 @@ fn get_node_weight(
     )
 }
 
-fn get_nodes_weight<I>(
-    iter: I,
-    g: &StableGraph<String, f32, Undirected, GraphIdx>,
-) -> Vec<(NodeIndex<GraphIdx>, f32)>
+fn get_nodes_weight<I>(iter: I, g: &_Graph) -> Vec<(_NodeIdx, f32)>
 where
-    I: Iterator<Item = NodeIndex<GraphIdx>>,
+    I: Iterator<Item = _NodeIdx>,
 {
-    iter.collect::<Vec<NodeIndex<GraphIdx>>>()
+    iter.collect::<Vec<_NodeIdx>>()
         .par_iter()
         .map(|node_idx| get_node_weight(*node_idx, g))
         .collect()
 }
 
-pub fn find_heaviest_node(
-    g: &StableGraph<String, f32, Undirected, GraphIdx>,
-    nodes_idx: Option<&Vec<NodeIndex<GraphIdx>>>,
-) -> (NodeIndex<GraphIdx>, f32) {
+pub fn find_heaviest_node(g: &_Graph, nodes_idx: Option<&Vec<_NodeIdx>>) -> (_NodeIdx, f32) {
     // Calculate each node's weight
     let mut nodes_weight = nodes_idx.map_or_else(
         || get_nodes_weight(g.node_indices(), g),
