@@ -11,7 +11,7 @@ use std::{
     io::{BufRead, BufReader},
     path::PathBuf,
 };
-use tracing::{debug, enabled, error, info_span, trace, warn, Level};
+use tracing::{debug, enabled, error, info, info_span, trace, warn, Level};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 #[cfg(not(feature = "large_graph"))]
@@ -66,7 +66,6 @@ pub fn graph_read<R: BufRead>(
         //let edge: Vec<&str> = line.split('\t').collect();
         let edge: Vec<String> = line.split('\t').map(str::to_string).collect();
         let mut _keep_edge = true;
-        debug!("Edge: {:?}", edge);
 
         // Define header
         if index == 0 {
@@ -83,6 +82,7 @@ pub fn graph_read<R: BufRead>(
             }
         }
         n_lines += 1;
+        debug!("Edge: {:?}", edge);
 
         // Check number of fields
         if edge.len() != header.len() {
@@ -99,16 +99,18 @@ pub fn graph_read<R: BufRead>(
         // Node label is stored as its "weight"
         for n in [0, 1] {
             if ["NA", "N/A", "Na", "na", "n/a", "N/a"].contains(&edge[n].as_str()) {
-                warn!("Missing node: {:?}", edge);
+                warn!("Edge node {} is N/A. Skipping edge!", n + 1);
                 _keep_edge = false;
             } else if !graph_idx.contains_key(&edge[n]) {
                 graph_idx.insert(edge[n].clone(), graph.add_node(edge[n].clone()));
+                debug!(
+                    "Node{} weight: {}",
+                    n + 1,
+                    graph
+                        .node_weight(graph_idx[&edge[n]])
+                        .expect("cannot find node weight")
+                );
             }
-            debug!(
-                "Node{} weight: {:?}",
-                n,
-                graph.node_weight(graph_idx[&edge[n]])
-            );
         }
         trace!("Graph: {:?}", graph);
 
@@ -135,27 +137,35 @@ pub fn graph_read<R: BufRead>(
                 .expect("cannot evaluate expression")
                 == 0.0
         {
-            _keep_edge = false
+            _keep_edge = false;
+            debug!("Edge eval failed. Skipping edge!");
         }
+
+        // Remove NaN
+        let edge_weight = if let Some(ref _weight_field) = weight_field {
+            if edge_weights[_weight_field].is_nan() {
+                _keep_edge = false;
+                warn!("Edge weight is NaN. Skipping edge!");
+            }
+            edge_weights[_weight_field] as f32
+        } else {
+            1.0
+        };
 
         // Add edge to graph
         if _keep_edge {
-            let e1 = graph.add_edge(
-                graph_idx[&edge[0]],
-                graph_idx[&edge[1]],
-                if let Some(ref _weight_field) = weight_field {
-                    edge_weights[_weight_field] as f32
-                } else {
-                    1.0
-                },
+            let e1 = graph.add_edge(graph_idx[&edge[0]], graph_idx[&edge[1]], edge_weight);
+            debug!(
+                "Added edge {:?} with weight {}",
+                e1,
+                graph.edge_weight(e1).expect("cannot find edge weight")
             );
-            debug!("Added edge: {:?}", e1);
         }
     }
     std::mem::drop(graph_span_enter);
     std::mem::drop(graph_span);
 
-    debug!(
+    info!(
         "Input file has {0} nodes with {1} edges{2}",
         graph.node_count(),
         n_lines,
@@ -175,7 +185,7 @@ pub fn graph_subset(graph: &mut _Graph, subset: PathBuf) -> usize {
     for node in reader_file.lines() {
         nodes_subset.push(node.expect("cannot read node from subset file"));
     }
-    debug!("Nodes to include: {:?}", nodes_subset);
+    info!("Nodes to include: {:?}", nodes_subset);
 
     graph.retain_nodes(|g, ix| nodes_subset.contains(&g[ix]));
 
@@ -207,11 +217,11 @@ pub fn find_heaviest_node(g: &_Graph, nodes_idx: Option<&Vec<_NodeIdx>>) -> (_No
         || get_nodes_weight(g.node_indices(), g),
         |vec| get_nodes_weight(vec.iter().copied(), g),
     );
+    trace!("Node weights: {:?}", nodes_weight);
 
     //Sort nodes based on connected edge weight and then alphabetically
     nodes_weight.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
-            .unwrap()
+        b.1.total_cmp(&a.1)
             .then(g.node_weight(a.0).cmp(&g.node_weight(b.0)))
     });
 
@@ -258,7 +268,7 @@ mod tests {
         );
         assert_eq!(graph.is_directed(), false);
         assert_eq!(graph.node_count(), 65);
-        assert_eq!(graph.edge_count(), 104);
+        assert_eq!(graph.edge_count(), 103);
     }
 
     #[test]
@@ -273,7 +283,7 @@ mod tests {
         assert_eq!(graph.is_directed(), false);
         graph_subset(&mut graph, PathBuf::from("test/example.subset"));
         assert_eq!(graph.node_count(), 11);
-        assert_eq!(graph.edge_count(), 22);
+        assert_eq!(graph.edge_count(), 21);
     }
 
     #[test]
