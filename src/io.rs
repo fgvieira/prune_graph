@@ -17,43 +17,25 @@ use crate::graph;
 pub fn graph_load(
     input: Option<PathBuf>,
     has_header: bool,
-    weight_field: Option<String>,
-    weight_filter: Option<String>,
-    weight_precision: u8,
+    weight: Option<String>,
+    filter: Option<String>,
+    precision: u8,
 ) -> (graph::_Graph, HashMap<String, graph::_NodeIdx>) {
     if let Some(_input) = input {
         let fh = File::open(&_input).expect("cannot open input file");
         if Path::new(&_input).extension() == Some(OsStr::new("gz")) {
             info!("Reading input Gzip file {:?}", &_input);
             let reader_file_gz = BufReader::with_capacity(128 * 1024, read::GzDecoder::new(fh));
-            crate::graph::graph_read(
-                reader_file_gz,
-                has_header,
-                weight_field,
-                weight_filter,
-                weight_precision,
-            )
+            crate::graph::graph_read(reader_file_gz, has_header, weight, filter, precision)
         } else {
             info!("Reading input file {:?}", &_input);
             let reader_file = BufReader::new(fh);
-            crate::graph::graph_read(
-                reader_file,
-                has_header,
-                weight_field,
-                weight_filter,
-                weight_precision,
-            )
+            crate::graph::graph_read(reader_file, has_header, weight, filter, precision)
         }
     } else {
         info!("Reading from STDIN");
         let reader_stdin = stdin().lock();
-        crate::graph::graph_read(
-            reader_stdin,
-            has_header,
-            weight_field,
-            weight_filter,
-            weight_precision,
-        )
+        crate::graph::graph_read(reader_stdin, has_header, weight, filter, precision)
     }
 }
 

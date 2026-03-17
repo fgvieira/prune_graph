@@ -29,17 +29,17 @@ pub struct Args {
     ///
     /// Column in input file to use as weight (needs to be present in header); if input file has no header you can use "column_#", where "#" stands for the column number. If `None`, each edge will have a weight of `1`.
     #[clap(short = 'w', long, value_name = "STRING")]
-    pub weight_field: Option<String>,
+    pub weight: Option<String>,
+
+    /// Weight precision.
+    #[clap(long, default_value_t = 6, value_name = "INT")]
+    pub precision: u8,
 
     /// Filter expression.
     ///
     /// Expression to filter edges before pruning; any expression supported by 'fasteval'.
     #[clap(short = 'f', long, required = false, value_name = "STRING")]
-    pub weight_filter: Option<String>,
-
-    /// Weight precision.
-    #[clap(long, default_value_t = 6, value_name = "INT")]
-    pub weight_precision: u8,
+    pub filter: Option<String>,
 
     /// Keep 'heavy' nodes
     ///

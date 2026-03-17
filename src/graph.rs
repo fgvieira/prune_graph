@@ -25,9 +25,9 @@ pub type _NodeIdx = NodeIndex<_GraphIdx>;
 pub fn graph_read<R: BufRead>(
     reader: R,
     has_header: bool,
-    weight_field: Option<String>,
-    weight_filter: Option<String>,
-    weight_precision: u8,
+    weight: Option<String>,
+    filter: Option<String>,
+    precision: u8,
 ) -> (_Graph, HashMap<String, _NodeIdx>) {
     // Create graph
     let mut graph = _Graph::default();
@@ -113,6 +113,9 @@ pub fn graph_read<R: BufRead>(
             }
         }
         trace!("Graph: {:?}", graph);
+        if !_keep_edge {
+            continue;
+        }
 
         // Parse weights and prepare dict for ez_eval
         use std::collections::BTreeMap;
@@ -123,7 +126,7 @@ pub fn graph_read<R: BufRead>(
                     round(
                         x.parse::<f32>()
                             .unwrap_or_else(|_| panic!("cannot convert weight '{x}' to float32")),
-                        weight_precision.into(),
+                        precision.into(),
                     ) as f64
                 })
                 .enumerate()
@@ -132,8 +135,8 @@ pub fn graph_read<R: BufRead>(
         trace!("Edge weights: {:?}", edge_weights);
 
         // Eval edge
-        if !weight_filter.is_none()
-            && fasteval::ez_eval(weight_filter.as_ref().unwrap(), &mut edge_weights)
+        if !filter.is_none()
+            && fasteval::ez_eval(filter.as_ref().unwrap(), &mut edge_weights)
                 .expect("cannot evaluate expression")
                 == 0.0
         {
@@ -142,12 +145,12 @@ pub fn graph_read<R: BufRead>(
         }
 
         // Remove NaN
-        let edge_weight = if let Some(ref _weight_field) = weight_field {
-            if edge_weights[_weight_field].is_nan() {
+        let edge_weight = if let Some(ref _weight) = weight {
+            if edge_weights[_weight].is_nan() {
                 _keep_edge = false;
                 warn!("Edge weight is NaN. Skipping edge!");
             }
-            edge_weights[_weight_field] as f32
+            edge_weights[_weight] as f32
         } else {
             1.0
         };
@@ -169,8 +172,8 @@ pub fn graph_read<R: BufRead>(
         "Input file has {0} nodes with {1} edges{2}",
         graph.node_count(),
         n_lines,
-        if let Some(_weight_filter) = weight_filter {
-            format!(" ({0} edges with {1})", graph.edge_count(), _weight_filter)
+        if let Some(_filter) = filter {
+            format!(" ({0} edges with {1})", graph.edge_count(), _filter)
         } else {
             "".to_string()
         }

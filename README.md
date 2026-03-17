@@ -37,7 +37,7 @@ $ ./target/release/prune_graph --help
 ```
 
 ## Input data
-As input, you need a `TSV` file (with or without header) with, at least, three columns. The first two columns must be the node names (defining an edge), and an additional column with the edge's weight (can be specified with `--weight_field`).
+As input, you need a `TSV` file (with or without header) with, at least, three columns. The first two columns must be the node names (defining an edge), and an additional column with the edge's weight (can be specified with `--weight`).
 
 ## Transform input data
 If you want to transform input data, you can use any CSV manipulation tool (e.g. [Miller](https://miller.readthedocs.io/en/latest/) or [CSVtk](https://bioinf.shenwei.me/csvtk/)). For example, to use absolute values on column `5`:
@@ -46,17 +46,17 @@ $ cat test/example.tsv | mlr --tsv --implicit-csv-header put '$5 = abs($5) then 
 ```
 
 ## Filter edges
-To filter edges, you can use option `--weight-filter` with any expression supported by [fasteval](https://crates.io/crates/fasteval). For example, to use column 7 as weight and only consider edges `> 0.2`:
+To filter edges, you can use option `--filter` with any expression supported by [fasteval](https://crates.io/crates/fasteval). For example, to use column 7 as weight and only consider edges `> 0.2`:
 ```bash
-$ cat test/example.tsv | ./target/release/prune_graph --weight-field "column_7" --weight-filter "column_7 > 0.2" --out out.keep
+$ cat test/example.tsv | ./target/release/prune_graph --weight "column_7" --filter "column_7 > 0.2" --out out.keep
 ```
 or, if also wanted to filter on `column_3 > 1000`:
 ```bash
-$ cat test/example.tsv | ./target/release/prune_graph --weight-field "column_7" --weight-filter "column_3 > 1000 && column_7 > 0.2" --out out.keep
+$ cat test/example.tsv | ./target/release/prune_graph --weight "column_7" --filter "column_3 > 1000 && column_7 > 0.2" --out out.keep
 ```
 or, if you want to only use `0.1 < weight > 0.2`:
 ```bash
-$ cat test/example.tsv | ./target/release/prune_graph --weight-field "column_7" --weight-filter "column_3 > 1000 && (column_7 < 0.1 || column_7 > 0.2)" --out out.keep
+$ cat test/example.tsv | ./target/release/prune_graph --weight "column_7" --filter "column_3 > 1000 && (column_7 < 0.1 || column_7 > 0.2)" --out out.keep
 ```
 
 ## Output
@@ -143,13 +143,13 @@ $ cargo build --features large_graph --release
 
 Since it can be quite slow to prune large graphs (specially if they made up of few but highly connected components), you might want to split your original graph into its components and prune wach one separately. First, to get a list of the components, run:
 ```
-$ ./target/release/prune_graph --in example_large.tsv --weight-field "column_3" --out-comps example_large.comps.tsv | sort | md5sum
-49ae0b526d610b8796ea18c2fc2ec0bf  -
+$ ./target/release/prune_graph --in example_large.tsv --weight "column_3" --filter 'column_3 < 0.5' --out-comps example_large.comps.tsv | sort | md5sum
+64b755cd826a2c6876aa25ec6159ebfd  -
 ```
 and press Ctrl+C when it starts the prunning. File `example_large.comps.tsv` will have the graph edges as a TSV file.
 
 Then run `prune_graph` on groups of (e.g.) 10 components (without splitting components):
 ```
-$ cat example_large.comps.tsv | awk '$4 != prev_comp {printf "==="} {prev_comp=$4; print}' | parallel --pipe --recend "===" --rrs -N 10 ./target/release/prune_graph --weight-field "column_3" | sort | md5sum
-49ae0b526d610b8796ea18c2fc2ec0bf  -
+$ cat example_large.comps.tsv | awk '$4 != prev_comp {printf "==="} {prev_comp=$4; print}' | parallel --pipe --recend "===" --rrs -N 10 ./target/release/prune_graph --quiet --weight "column_3" | sort | md5sum
+64b755cd826a2c6876aa25ec6159ebfd  -
 ```

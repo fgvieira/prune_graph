@@ -67,9 +67,9 @@ fn main() {
     let (mut graph, _graph_idx) = io::graph_load(
         args.input,
         args.header,
-        args.weight_field,
-        args.weight_filter,
-        args.weight_precision,
+        args.weight,
+        args.filter,
+        args.precision,
     );
 
     // Open subset file
