@@ -185,7 +185,7 @@ pub fn graph_subset(graph: &mut _Graph, subset: PathBuf) -> usize {
     for node in reader_file.lines() {
         nodes_subset.push(node.expect("cannot read node from subset file"));
     }
-    info!("Nodes to include: {:?}", nodes_subset);
+    debug!("Nodes to include: {:?}", nodes_subset);
 
     graph.retain_nodes(|g, ix| nodes_subset.contains(&g[ix]));
 
