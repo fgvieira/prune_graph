@@ -69,7 +69,6 @@ fn main() {
         args.header,
         args.weight_field,
         args.weight_filter,
-        args.weight_n_edges,
         args.weight_precision,
     );
 

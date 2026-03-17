@@ -17,9 +17,8 @@ use crate::graph;
 pub fn graph_load(
     input: Option<PathBuf>,
     has_header: bool,
-    weight_field: String,
+    weight_field: Option<String>,
     weight_filter: Option<String>,
-    weight_n_edges: bool,
     weight_precision: u8,
 ) -> (graph::_Graph, HashMap<String, graph::_NodeIdx>) {
     if let Some(_input) = input {
@@ -32,7 +31,6 @@ pub fn graph_load(
                 has_header,
                 weight_field,
                 weight_filter,
-                weight_n_edges,
                 weight_precision,
             )
         } else {
@@ -43,7 +41,6 @@ pub fn graph_load(
                 has_header,
                 weight_field,
                 weight_filter,
-                weight_n_edges,
                 weight_precision,
             )
         }
@@ -55,7 +52,6 @@ pub fn graph_load(
             has_header,
             weight_field,
             weight_filter,
-            weight_n_edges,
             weight_precision,
         )
     }
@@ -130,27 +126,37 @@ pub fn graph_save_components_tsv(
     }
     // Print components
     for (idx, comp) in init_comps.iter().enumerate() {
-        let mut node_list = Vec::new();
-        for source in comp.iter() {
-            for target in graph.neighbors(*source) {
-                if node_list.contains(&target) {
-                    continue;
-                }
-                let edge = graph.find_edge(*source, target).unwrap();
-                comps_file
-                    .write_all(
-                        format!(
-                            "{}\t{}\t{}\t{}\n",
-                            graph.node_weight(*source).unwrap(),
-                            graph.node_weight(target).unwrap(),
-                            graph.edge_weight(edge).unwrap(),
-                            idx,
-                        )
+        // If single node in component, write NA
+        if comp.len() == 1 {
+            comps_file
+                .write_all(
+                    format!("{}\tNA\tNA\t{}\n", graph.node_weight(comp[0]).unwrap(), idx)
                         .as_bytes(),
-                    )
-                    .expect("Cannot write to components output file.");
+                )
+                .expect("Cannot write to components output file.");
+        } else {
+            let mut node_list = Vec::new();
+            for source in comp.iter() {
+                for target in graph.neighbors(*source) {
+                    if node_list.contains(&target) {
+                        continue;
+                    }
+                    let edge = graph.find_edge(*source, target).unwrap();
+                    comps_file
+                        .write_all(
+                            format!(
+                                "{}\t{}\t{}\t{}\n",
+                                graph.node_weight(*source).unwrap(),
+                                graph.node_weight(target).unwrap(),
+                                graph.edge_weight(edge).unwrap(),
+                                idx,
+                            )
+                            .as_bytes(),
+                        )
+                        .expect("Cannot write to components output file.");
+                }
+                node_list.push(*source);
             }
-            node_list.push(*source);
         }
     }
 }

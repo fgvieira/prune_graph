@@ -42,7 +42,7 @@ As input, you need a `TSV` file (with or without header) with, at least, three c
 ## Transform input data
 If you want to transform input data, you can use any CSV manipulation tool (e.g. [Miller](https://miller.readthedocs.io/en/latest/) or [CSVtk](https://bioinf.shenwei.me/csvtk/)). For example, to use absolute values on column `5`:
 ```bash
-$ cat test/example.tsv | mlr --tsv --implicit-csv-header put '$5 = abs($5)' | ./target/release/prune_graph --header [...]
+$ cat test/example.tsv | mlr --tsv --implicit-csv-header put '$5 = abs($5) then fill-empty' | ./target/release/prune_graph --header [...]
 ```
 
 ## Filter edges
@@ -143,13 +143,13 @@ $ cargo build --features large_graph --release
 
 Since it can be quite slow to prune large graphs (specially if they made up of few but highly connected components), you might want to split your original graph into its components and prune wach one separately. First, to get a list of the components, run:
 ```
-$ ./target/release/prune_graph --in example_large.tsv --out-comps example_large.comps.tsv | sort | md5sum
+$ ./target/release/prune_graph --in example_large.tsv --weight-field "column_3" --out-comps example_large.comps.tsv | sort | md5sum
 49ae0b526d610b8796ea18c2fc2ec0bf  -
 ```
 and press Ctrl+C when it starts the prunning. File `example_large.comps.tsv` will have the graph edges as a TSV file.
 
 Then run `prune_graph` on groups of (e.g.) 10 components (without splitting components):
 ```
-$ cat example_large.comps.tsv | awk '$4 != prev_comp {printf "==="} {prev_comp=$4; print}' | parallel --pipe --recend "===" --rrs -N 10 ./target/release/prune_graph | sort | md5sum
+$ cat example_large.comps.tsv | awk '$4 != prev_comp {printf "==="} {prev_comp=$4; print}' | parallel --pipe --recend "===" --rrs -N 10 ./target/release/prune_graph --weight-field "column_3" | sort | md5sum
 49ae0b526d610b8796ea18c2fc2ec0bf  -
 ```

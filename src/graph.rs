@@ -25,9 +25,8 @@ pub type _NodeIdx = NodeIndex<_GraphIdx>;
 pub fn graph_read<R: BufRead>(
     reader: R,
     has_header: bool,
-    weight_field: String,
+    weight_field: Option<String>,
     weight_filter: Option<String>,
-    weight_n_edges: bool,
     weight_precision: u8,
 ) -> (_Graph, HashMap<String, _NodeIdx>) {
     // Create graph
@@ -66,6 +65,8 @@ pub fn graph_read<R: BufRead>(
 
         //let edge: Vec<&str> = line.split('\t').collect();
         let edge: Vec<String> = line.split('\t').map(str::to_string).collect();
+        let mut _keep_edge = true;
+        debug!("Edge: {:?}", edge);
 
         // Define header
         if index == 0 {
@@ -77,10 +78,6 @@ pub fn graph_read<R: BufRead>(
                     .collect()
             };
             debug!("HEADER = {:?}", header);
-            if !header.iter().any(|h| h == &weight_field) {
-                error!("weight_field '{weight_field}' is not present in the header");
-                std::process::exit(-1);
-            }
             if has_header {
                 continue;
             }
@@ -98,17 +95,24 @@ pub fn graph_read<R: BufRead>(
             std::process::exit(-1);
         }
 
-        // Check if nodes exist and add them if not
+        // Add nodes (check if exist and add them if not)
         // Node label is stored as its "weight"
-        if !graph_idx.contains_key(&edge[0]) {
-            graph_idx.insert(edge[0].clone(), graph.add_node(edge[0].clone()));
-        }
-        if !graph_idx.contains_key(&edge[1]) {
-            graph_idx.insert(edge[1].clone(), graph.add_node(edge[1].clone()));
+        for n in [0, 1] {
+            if ["NA", "N/A", "Na", "na", "n/a", "N/a"].contains(&edge[n].as_str()) {
+                warn!("Missing node: {:?}", edge);
+                _keep_edge = false;
+            } else if !graph_idx.contains_key(&edge[n]) {
+                graph_idx.insert(edge[n].clone(), graph.add_node(edge[n].clone()));
+            }
+            debug!(
+                "Node{} weight: {:?}",
+                n,
+                graph.node_weight(graph_idx[&edge[n]])
+            );
         }
         trace!("Graph: {:?}", graph);
 
-        // Prepare dict for ez_eval
+        // Parse weights and prepare dict for ez_eval
         use std::collections::BTreeMap;
         let mut edge_weights: BTreeMap<String, f64> = BTreeMap::from_iter(
             edge.iter()
@@ -123,41 +127,29 @@ pub fn graph_read<R: BufRead>(
                 .enumerate()
                 .map(|(i, w)| (header[i + 2].clone(), w)),
         );
+        trace!("Edge weights: {:?}", edge_weights);
 
-        // Debug
-        if index < 20 {
-            debug!("Edge: {:?}", edge);
-            debug!("Node1 weight: {:?}", graph.node_weight(graph_idx[&edge[0]]));
-            debug!("Node2 weight: {:?}", graph.node_weight(graph_idx[&edge[1]]));
-            debug!("Edge weight: {:?}", edge_weights);
-        }
-
-        // Skip edge if NaN
-        if edge_weights[&weight_field].is_nan() {
-            warn!("NaN found:\n\t{:?}", edge);
-            continue;
+        // Eval edge
+        if !weight_filter.is_none()
+            && fasteval::ez_eval(weight_filter.as_ref().unwrap(), &mut edge_weights)
+                .expect("cannot evaluate expression")
+                == 0.0
+        {
+            _keep_edge = false
         }
 
         // Add edge to graph
-        if weight_filter.is_none()
-            || fasteval::ez_eval(weight_filter.as_ref().unwrap(), &mut edge_weights)
-                .expect("cannot evaluate expression")
-                != 0.0
-        {
-            // Add edge
+        if _keep_edge {
             let e1 = graph.add_edge(
                 graph_idx[&edge[0]],
                 graph_idx[&edge[1]],
-                if weight_n_edges {
-                    1.0
+                if let Some(ref _weight_field) = weight_field {
+                    edge_weights[_weight_field] as f32
                 } else {
-                    edge_weights[&weight_field] as f32
+                    1.0
                 },
             );
-            // Debug
-            if index < 20 {
-                debug!("Added edge: {:?}", e1);
-            }
+            debug!("Added edge: {:?}", e1);
         }
     }
     std::mem::drop(graph_span_enter);
@@ -260,9 +252,8 @@ mod tests {
         let (graph, _graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             true,
-            "r2".to_string(),
+            Some("r2".to_string()),
             Some("r2 > 0.2".to_string()),
-            false,
             4,
         );
         assert_eq!(graph.is_directed(), false);
@@ -275,9 +266,8 @@ mod tests {
         let (mut graph, _graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             true,
-            "r2".to_string(),
+            Some("r2".to_string()),
             Some("r2 > 0.2".to_string()),
-            false,
             4,
         );
         assert_eq!(graph.is_directed(), false);
@@ -291,9 +281,8 @@ mod tests {
         let (graph, graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             true,
-            "r2".to_string(),
+            Some("r2".to_string()),
             Some("r2 > 0.2".to_string()),
-            false,
             4,
         );
         assert_eq!(graph.edges(graph_idx["NC_046966.1:26131"]).count(), 6);
@@ -304,9 +293,8 @@ mod tests {
         let (graph, graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             true,
-            "r2".to_string(),
+            Some("r2".to_string()),
             Some("r2 > 0.2".to_string()),
-            false,
             4,
         );
 
@@ -323,9 +311,8 @@ mod tests {
         let (graph, _graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             true,
-            "r2".to_string(),
+            Some("r2".to_string()),
             Some("r2 > 0.2".to_string()),
-            false,
             4,
         );
 
@@ -362,9 +349,8 @@ mod tests {
         let (mut graph, graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             true,
-            "r2".to_string(),
+            Some("r2".to_string()),
             Some("r2 > 0.2".to_string()),
-            false,
             4,
         );
 
@@ -423,9 +409,8 @@ mod tests {
         let (graph, _graph_idx) = graph_read(
             BufReader::new(File::open("test/example.tsv").expect("cannot open input file")),
             true,
-            "r2".to_string(),
+            Some("r2".to_string()),
             Some("r2 > 0.2".to_string()),
-            false,
             4,
         );
         let ccs = tarjan_scc(&graph);
